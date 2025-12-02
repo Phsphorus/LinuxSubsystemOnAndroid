@@ -8,6 +8,12 @@ umount /data/local/linux/dev/pts
 umount /data/local/linux/dev
 umount /data/local/linux/proc
 umount /data/local/linux/mnt/sdcard
+umount -l /data/local/linux/root/.gvfs
+umount -l /data/local/linux/root/.cache/doc
+umount -f /data/local/linux/root/.gvfs
+umount -f /data/local/linux/root/.cache/doc
+umount -l /data/local/linux/mnt/halbridge/cam
+umount -l /data/local/linux/mnt/halbridge/rec
 
 mount | grep /data/local/linux
 
