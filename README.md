@@ -1,5 +1,5 @@
 # LSA
-LSA Stands for Linux Subsystem on Android
+Linux Subsystem on Android - LSA
 
 Objective:
 Near native Linux on android that can access hardware.
