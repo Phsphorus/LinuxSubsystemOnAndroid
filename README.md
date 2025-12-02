@@ -2,10 +2,13 @@
 Linux Subsystem on Android - LSA
 
 REQUIREMENTS:
+
 root
+
 Should work on any android with root
 
 Objective:
+
 Near native Linux on android that can access hardware.
 
 Completed:
