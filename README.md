@@ -19,6 +19,8 @@ Camera -- photos only
 
 Speakers/Bluetooth -- Full Audio Routing
 
+-------
+
 My current goals are:
 
 Make a custom Xserver for true GPU acceleration
