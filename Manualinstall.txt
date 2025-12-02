@@ -11,6 +11,9 @@ umount /data/local/linux/mnt/sdcard
 
 mount | grep /data/local/linux
 
+to get nano in su
+export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/applets:$PATH"
+
 audiobootstrap
 /usr/bin/HALAudioAutouser.sh
 
@@ -54,4 +57,5 @@ exit 0
 ==
 chmod +x /etc/rc.local
 apt install surf
+
 
