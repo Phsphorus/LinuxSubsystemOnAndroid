@@ -79,6 +79,9 @@ androidctl vol ring 1-15 -- changes ring volume
 androidctl vol alarm 1-15 -- changes alarm volume
 
 
+HALAudio automatically chooses the best buffer sizes for stable, low-latency audio.
+You normally do not need to run HALAudio up or HALAudio down.
+
 "HALAudio" typed into any terminal will puppet HALAudio
 
 HALAudio status -- shows status and buffer chosen
