@@ -1,0 +1,27 @@
+useful things
+umount -l /data/local/linux/dev/pts
+umount -l /data/local/linux/dev
+umount -l /data/local/linux/proc
+umount -l /data/local/linux/sys
+umount -l /data/local/linux/mnt/sdcard
+umount /data/local/linux/dev/pts
+umount /data/local/linux/dev
+umount /data/local/linux/proc
+umount /data/local/linux/mnt/sdcard
+
+mount | grep /data/local/linux
+
+to get nano in su
+export PATH="/data/data/com.termux/files/usr/bin:/data/data/com.termux/files/usr/bin/applets:$PATH"
+
+audiobootstrap
+/usr/bin/HALAudioAutouser.sh
+
+/opt/andgl/shim
+For Custom Xserver
+Xvfb :99 -screen 0 520x1200x24 &
+export DISPLAY=:99
+DISPLAY=:99 startlxde &
+DISPLAY=:99 LD_PRELOAD=/opt/andgl/libGL.so /opt/andgl/xmirror
+
+------------------
