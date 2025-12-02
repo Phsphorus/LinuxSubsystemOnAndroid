@@ -23,15 +23,17 @@ Camera -- photos only
 
 Speakers/Bluetooth -- Full Audio Routing
 
+Microphone recordings
+
 -------
 
 My current goals are:
 
-Make a custom Xserver for true GPU acceleration
+Make a custom Xserver for true GPU acceleration -- Active Devolopment | Priority
 
-Microphone recording
+Live Microphone recording 
 
-PhoneUI
+PhoneUI -- Active Devolopment 
 
 Touch and Gestures
 
