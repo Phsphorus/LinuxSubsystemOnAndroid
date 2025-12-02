@@ -27,10 +27,9 @@ chmod +x /usr/local/bin/HALAudioAutouser.sh
 /etc/rc.local
 #!/bin/sh
 /usr/local/bin/HALAudioAutouser.sh
+xhost +
 exit 0
 ==
 chmod +x /etc/rc.local
 apt install surf
-
-
-
+mv xserver.zip /opt/andgl
