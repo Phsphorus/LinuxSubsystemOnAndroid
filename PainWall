@@ -1,9 +1,0 @@
-
-2025-12-02 17:37:46.780 29317-30800 AndroidRuntime          net.hw.andglbridge2                  E  FATAL EXCEPTION: AndGL RenderThread
-                                                                                                    Process: net.hw.andglbridge2, PID: 29317
-                                                                                                    java.lang.IllegalArgumentException: Must use a native order direct Buffer
-                                                                                                    	at android.opengl.GLES20.glVertexAttribPointerBounds(Native Method)
-                                                                                                    	at android.opengl.GLES20.glVertexAttribPointer(GLES20.java:1910)
-                                                                                                    	at net.hw.andglbridge2.GLBridgeView$RenderThread.handleCommandRemoteGpu(GLBridgeView.java:858)
-                                                                                                    	at net.hw.andglbridge2.GLBridgeView$RenderThread.processStream(GLBridgeView.java:384)
-                                                                                                    	at net.hw.andglbridge2.GLBridgeView$RenderThread.run(GLBridgeView.java:159)
