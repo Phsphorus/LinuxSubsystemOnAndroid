@@ -29,7 +29,7 @@ Microphone recordings
 
 My current queue is:
 
-VirGL + Java App -- Active Devolopment | Priority
+VirGL + Java App + Touch control -- Active Devolopment | Priority
 
 Make a OpenGL shim and GL compositor | Scrapped, I got like 90% done before I realised I could do something better
 
