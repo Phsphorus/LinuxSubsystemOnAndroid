@@ -13,7 +13,7 @@ SELinux should not have to be set to permissive, we work within the bounds of SE
 
 Objective:
 
-Near native Linux on android that can access hardware.
+Native feeling Linux with real hardware integration delivered through Android.
 
 Completed:
 
