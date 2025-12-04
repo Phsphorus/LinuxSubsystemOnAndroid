@@ -5,6 +5,8 @@ REQUIREMENTS:
 
 root
 
+Android 7+ Supported -- planned to extend futher
+
 Should work on any android with root
 
 SELinux should not have to be set to permissive, we work within the bounds of SELinux naturally -- subject to change
