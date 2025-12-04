@@ -7,8 +7,6 @@ root
 
 Android 7+ Supported -- planned to extend to Android 4.4.4
 
-Should work on any android with root
-
 SELinux should not have to be set to permissive, we work within the bounds of SELinux naturally -- subject to change
 
 ------
