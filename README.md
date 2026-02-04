@@ -1,3 +1,5 @@
+Complete overhaul in progress. Dropping LPC layers and transitioning to direct Android framework integration (audio/Bluetooth via Binder) with Linux-driven execution and DRM display control.
+
 # LSA
 Linux Subsystem on Android - LSA
 
