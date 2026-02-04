@@ -1,5 +1,19 @@
 Complete overhaul in progress. Dropping LPC layers and transitioning to direct Android framework integration (audio/Bluetooth via Binder) with Linux-driven execution and DRM display control.
 
+Target architecture
+Linux chroot (Python, C)
+        |
+        |   Unix socket / TCP localhost
+        |
+AudioBridge daemon (root, Magisk)
+        |
+        |   Binder IPC
+        |
+Android framework services
+  - AudioManager / AudioFlinger
+  - BluetoothManager
+  - MediaSession
+
 # LSA
 Linux Subsystem on Android - LSA
 
