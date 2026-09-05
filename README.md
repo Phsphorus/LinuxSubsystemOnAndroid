@@ -9,7 +9,7 @@ The goal is not simply to run a Linux chroot on Android. LSA attempts to make th
 Instead of expecting every Linux application to understand Android, LSA tries to make Android resources appear in forms Linux software already understands.
 
 > **Current status:** Pre-Alpha
-> **Current known-good snapshot:** `1.2.0.1-PreAlpha-KnownGood-FullStack-TierDComplete-20260901`
+> **Current known-good snapshot:** `1.2.0.5-PreAlpha-KnownGood-FullStack-TierDComplete-20260901`
 
 ---
 
