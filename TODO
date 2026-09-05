@@ -1,19 +1,1016 @@
+# TODO — Next LSA Architecture: Capability-Driven Per-Module Compatibility
 
+## What I'm Working On Next
 
-VIBRATE support
+The next major LSA refactor is changing compatibility detection from:
 
-SCREEN_BRIGHTNESS control
+```text
+"What Android version / phone is this?"
+```
 
+to:
 
-SENSORS (accelerometer/gyroscope)
+```text
+"What can this device actually do?"
+```
 
-Full Android↔Linux clipboard sync
+LSA currently has several working compatibility systems, but many were developed individually as the project expanded.
 
-USB passthrough
+The next step is to formalize them into a common architecture where **each major subsystem independently probes the device, chooses the best implementation available, and reports exactly what it selected.**
 
-Python sends commands/frames/meta over a port
-Android Java turns that into GLES drawing
-GLES renders into a SurfaceView 
+This will become the foundation for making LSA portable across devices I have never tested before.
 
-so python doesnt capture anything, its just telling the surfaceview to display these frames here
-it does not matter if the controller of the frames for the live view is slow or not because it just needs to show what it is exactly for PhoneUI
+---
+
+# The Main Idea
+
+LSA will no longer classify an entire phone as something like:
+
+```text
+Tier A phone
+Tier B phone
+Tier C phone
+```
+
+Instead, **every module gets its own independent compatibility tier.**
+
+A device might look like:
+
+```text
+Core chroot         TIER A / AVAILABLE
+Device namespace    TIER B / AVAILABLE
+Storage             TIER A / AVAILABLE
+System D-Bus        TIER A / AVAILABLE
+Display             TIER C / AVAILABLE
+GPU                 TIER C / AVAILABLE
+Audio               TIER A / AVAILABLE
+Camera              TIER C / AVAILABLE
+Sensors             TIER D / AVAILABLE
+```
+
+Those letters are local to each subsystem.
+
+For example:
+
+```text
+Audio Tier A
+    AAudio / HALAudioS
+
+Sensors Tier A
+    native usable Linux IIO
+
+GPU Tier A
+    directly usable native GPU interface
+```
+
+These technologies have nothing to do with each other.
+
+`Tier A` simply means:
+
+> The best implementation LSA currently knows how to use for that specific subsystem.
+
+---
+
+# Why I'm Doing This
+
+Android devices are inconsistent.
+
+Two phones running the same Android version may have very different:
+
+* kernels
+* GPU drivers
+* device nodes
+* FUSE behavior
+* sensor implementations
+* audio capabilities
+* camera interfaces
+* SELinux rules
+* vendor modifications
+
+Because of that, this:
+
+```text
+Android 13
+    ↓
+use backend X
+```
+
+is not reliable enough.
+
+Neither is:
+
+```text
+Blackview N6000
+    ↓
+use backend Y
+```
+
+The new architecture will instead do:
+
+```text
+probe capability
+      ↓
+actually test it
+      ↓
+AVAILABLE / UNSUPPORTED / ERROR
+      ↓
+use it or try the next backend
+```
+
+Android version, API level, kernel version, manufacturer, architecture, model, and SELinux mode will still be recorded.
+
+They just will not be the primary source of truth.
+
+---
+
+# Standard Tier Result
+
+Every backend probe should return one of three primary states:
+
+## AVAILABLE
+
+The backend was actually tested and works.
+
+```text
+FUSE backend
+
+/dev/fuse opened
+temporary mount succeeded
+required options succeeded
+cleanup succeeded
+
+AVAILABLE
+```
+
+---
+
+## UNSUPPORTED
+
+The required capability genuinely does not exist.
+
+```text
+CUSE backend
+
+/dev/cuse absent
+kernel CUSE support unavailable
+
+UNSUPPORTED
+```
+
+This is normal.
+
+It does not mean the phone is broken.
+
+---
+
+## ERROR
+
+The capability appears to exist, but something unexpected prevented it from working.
+
+```text
+Software IIO backend
+
+IIO support detected
+configfs detected
+temporary device creation attempted
+
+EINVAL
+
+ERROR
+```
+
+Errors will remain visible for debugging, but they should normally **not stop lower tiers from being attempted.**
+
+Example:
+
+```text
+Sensors
+
+Tier A   UNSUPPORTED
+Tier B   ERROR
+Tier C   UNSUPPORTED
+Tier D   AVAILABLE
+
+Selected:
+Tier D
+```
+
+---
+
+# Capability Graph
+
+Another important change is that modules will stop depending directly on each other's tier letters.
+
+Bad:
+
+```text
+Sensors Tier D requires DeviceNamespace Tier B
+```
+
+The sensor implementation should not care how DeviceNamespace created a private `/dev`.
+
+Instead:
+
+```text
+Sensors Tier D requires:
+
+capability.sensorbus
+capability.fuse.mount
+capability.device.private
+capability.unix_socket
+```
+
+DeviceNamespace might provide:
+
+```text
+capability.device.private
+```
+
+through Tier A on one phone and Tier B on another.
+
+Sensors only cares that the required capability exists.
+
+This turns LSA into a **capability graph instead of a hardcoded implementation graph.**
+
+---
+
+# Planned Module Layout
+
+The eventual structure will look roughly like:
+
+```text
+LSA/
+│
+├── Platform/
+│   ├── probes
+│   ├── capability database
+│   ├── selectors
+│   └── platform report
+│
+├── Audio/
+│   ├── selector
+│   └── tiers/
+│
+├── GPU/
+│   ├── selector
+│   └── tiers/
+│
+├── Camera/
+│   └── tiers/
+│
+├── Sensors/
+│   └── tiers/
+│
+├── DeviceNamespace/
+│   └── tiers/
+│
+├── Storage/
+│   └── tiers/
+│
+├── Display/
+│   └── tiers/
+│
+└── DBus/
+    └── tiers/
+```
+
+Every module should conceptually support:
+
+```text
+probe
+start
+stop
+status
+provides
+requires
+```
+
+Not every module needs separate scripts for all of these immediately.
+
+This is the interface LSA will gradually standardize around.
+
+---
+
+# First Module: Sensors
+
+Sensors will be the first subsystem converted to the new architecture.
+
+Why sensors?
+
+Because the current sensor stack already demonstrates exactly why capability-based fallback is useful.
+
+The planned ladder is approximately:
+
+```text
+SENSORS
+
+Tier A
+    native usable Linux IIO
+
+Tier B
+    kernel-assisted/software IIO
+    HALSensorBus → kernel IIO devices
+
+Tier C
+    CUSE-backed IIO compatibility
+
+Tier D
+    FUSE-backed synthetic IIO
+    private /dev
+    userspace brokers
+    event ioctl compatibility
+
+Tier E
+    high-level Linux sensor compatibility
+    D-Bus / SensorProxy
+
+Tier F
+    LSA-native sensor API
+```
+
+The current known-good N6000 implementation is:
+
+```text
+Tier A   UNSUPPORTED
+Tier B   UNSUPPORTED
+Tier C   UNSUPPORTED
+Tier D   AVAILABLE
+Tier F   AVAILABLE
+
+Selected:
+Tier D
+```
+
+The existing Tier-D implementation is already working and **will not be rewritten during the initial selector work.**
+
+The order is:
+
+```text
+build selector
+      ↓
+prove selector
+      ↓
+wrap existing Tier D
+      ↓
+verify behavior remains identical
+```
+
+Known-good functionality stays known-good.
+
+---
+
+# Device Namespace
+
+The private `/dev` work will become its own module shortly after sensors.
+
+Possible ladder:
+
+```text
+DEVICE NAMESPACE
+
+Tier A
+    native safe Linux device namespace
+
+Tier B
+    private tmpfs /dev
+    Android devices under /dev/.host
+    selected compatibility links/devices exposed to Linux
+
+Tier C
+    selective device recreation/proxying
+
+Tier D
+    userspace device proxies
+
+UNSUPPORTED
+```
+
+The current N6000 private `/dev` implementation is already proven and will likely become the current Tier B backend.
+
+---
+
+# Audio
+
+Audio gets its own independent ladder.
+
+Current direction:
+
+```text
+AUDIO
+
+Tier A
+    current AAudio / HALAudioS implementation
+
+Tier C
+    SoX compatibility fallback
+
+additional tiers
+    added only when real implementations exist
+```
+
+I am deliberately **not filling every letter just because A–Z exists.**
+
+Unused tiers are fine.
+
+A backend gets a tier when there is actually something worth putting there.
+
+---
+
+# GPU
+
+The GPU module will eventually choose between things such as:
+
+```text
+GPU
+
+Tier A
+    directly usable native Linux GPU path
+
+Tier B
+    high-quality Android GPU adaptation
+
+Tier C
+    GPUBridge / VirGL / virpipe
+
+Tier D
+    software Mesa / llvmpipe
+
+Tier E
+    remote/framebuffer rendering
+
+Tier F
+    no acceleration
+```
+
+The exact tier definitions will be finalized around real implementations and real hardware probes.
+
+---
+
+# Display
+
+Likely direction:
+
+```text
+DISPLAY
+
+Tier A
+    native DRM/KMS
+
+Tier B
+    native or bridged Wayland
+
+Tier C
+    Termux:X11
+
+Tier D
+    VNC / RFB
+
+Tier E
+    generic framebuffer transport
+```
+
+Again, this is a direction, not a promise that every tier will exist.
+
+---
+
+# Camera
+
+Likely direction:
+
+```text
+CAMERA
+
+Tier A
+    usable native V4L2
+
+Tier B
+    Android camera → V4L2-style bridge
+
+Tier C
+    HALAgent camera/frame bridge
+
+Tier D
+    GStreamer / PipeWire compatibility
+
+Tier E
+    LSA-native camera API
+```
+
+---
+
+# FUSE
+
+FUSE also needs real capability detection.
+
+Checking:
+
+```text
+/dev/fuse exists
+```
+
+is not enough.
+
+LSA needs to know what that FUSE implementation can actually do.
+
+Possible capabilities include:
+
+```text
+capability.fuse.mount
+capability.fuse.direct_io
+capability.fuse.sysfs_overlay
+```
+
+A probe should therefore test the actual operation LSA needs.
+
+Example:
+
+```text
+open /dev/fuse
+      ↓
+create temporary filesystem
+      ↓
+mount it
+      ↓
+test required behavior
+      ↓
+unmount
+      ↓
+clean everything up
+```
+
+Only then is the capability marked:
+
+```text
+AVAILABLE
+```
+
+---
+
+# Platform Report
+
+A major visible result of this refactor will be a centralized:
+
+```text
+LSA Platform Report
+```
+
+Example:
+
+```text
+LSA Platform Report
+────────────────────────────────────────
+
+Android             13 / API 33
+Architecture        arm64
+Kernel              5.10.x
+SELinux             permissive
+
+Core chroot         TIER A / AVAILABLE
+Device namespace    TIER B / AVAILABLE
+Storage             TIER A / AVAILABLE
+System D-Bus        TIER A / AVAILABLE
+Display             TIER C / AVAILABLE
+GPU                 TIER C / AVAILABLE
+Audio               TIER A / AVAILABLE
+Camera              TIER C / AVAILABLE
+Sensors             TIER D / AVAILABLE
+
+Overall support      FULL
+```
+
+The Android information is descriptive.
+
+The module results are authoritative.
+
+---
+
+# Verbose Platform Report
+
+There will also be a diagnostic mode.
+
+Example:
+
+```text
+Sensors
+────────────────────────────────────────
+
+Tier A
+    UNSUPPORTED
+
+    native IIO devices: 2
+    suitable sensor mappings: 0/20
+
+Tier B
+    UNSUPPORTED
+
+    CONFIG_IIO: yes
+    configfs: yes
+    usable software IIO devices: no
+
+Tier C
+    UNSUPPORTED
+
+    CUSE: unavailable
+
+Tier D
+    AVAILABLE
+
+    HALSensorBus: yes
+    FUSE mount: yes
+    private /dev: yes
+    synthetic mappings: 20/20
+    event shim: yes
+
+Selected:
+    Tier D / fuse-iio
+```
+
+Unexpected failures should show useful diagnostics:
+
+```text
+Tier B
+    ERROR
+
+    probe:
+        temporary IIO device creation
+
+    errno:
+        EINVAL
+```
+
+---
+
+# Runtime State
+
+LSA will record its selections instead of trying to rediscover everything whenever another module asks.
+
+Planned layout:
+
+```text
+/run/lsa/
+│
+├── platform.json
+├── capabilities.json
+│
+└── modules/
+    ├── audio.json
+    ├── gpu.json
+    ├── camera.json
+    ├── sensors.json
+    ├── storage.json
+    └── device-namespace.json
+```
+
+Example:
+
+```json
+{
+  "module": "sensors",
+  "status": "AVAILABLE",
+  "selected_tier": "D",
+  "backend": "fuse-iio",
+  "provides": [
+    "linux.iio.sysfs",
+    "linux.iio.chardev",
+    "linux.iio.events"
+  ]
+}
+```
+
+Other modules can then consume the capabilities rather than inspecting implementation internals.
+
+---
+
+# Startup Direction
+
+Eventually LSA startup should roughly become:
+
+```text
+collect platform facts
+        ↓
+probe primitive capabilities
+        ↓
+build capability graph
+        ↓
+probe module tiers
+        ↓
+select best AVAILABLE backend
+        ↓
+resolve dependencies
+        ↓
+start selected implementations
+        ↓
+verify runtime health
+        ↓
+write runtime state
+        ↓
+generate Platform Report
+```
+
+Teardown becomes:
+
+```text
+read recorded runtime state
+        ↓
+determine active implementations
+        ↓
+stop modules in reverse dependency order
+        ↓
+remove mounts/sockets/runtime state
+        ↓
+clean shutdown
+```
+
+LSA should not blindly probe the machine again during shutdown when it already knows what it started.
+
+---
+
+# Development Order
+
+## Phase 1 — Capability Framework
+
+Build the common foundation:
+
+* capability result format
+* module result format
+* `AVAILABLE / UNSUPPORTED / ERROR`
+* tier selector
+* dependency system
+* `provides` / `requires`
+* runtime state directory
+* Platform Report generator
+
+Existing implementations stay where they are during this phase.
+
+---
+
+## Phase 2 — Sensors
+
+Sensors become the first complete tiered subsystem.
+
+Build probes for the planned sensor backends.
+
+Current phone must still resolve to:
+
+```text
+Sensors
+Tier D / AVAILABLE
+```
+
+and launch the existing known-good implementation.
+
+---
+
+## Phase 3 — Wrap Existing Tier-D Sensors
+
+Move or wrap the current:
+
+* LSAIIORegistry
+* LSAIIOProxy
+* StreamBroker
+* StateBroker
+* EventBroker
+* event ioctl shim
+* sensor runtime controller
+
+behind:
+
+```text
+Sensors/tiers/D/
+```
+
+No functional rewrite.
+
+Behavior should remain identical.
+
+---
+
+## Phase 4 — Device Namespace
+
+Convert the current private `/dev` implementation into the same modular system.
+
+Preserve the current working behavior.
+
+---
+
+## Phase 5 — Audio
+
+Formalize the current audio implementations and their probes.
+
+Start with real backends that already exist.
+
+Do not invent tiers just to populate the alphabet.
+
+---
+
+## Phase 6 — GPU
+
+Formalize:
+
+* native GPU possibilities
+* GPUBridge
+* VirGL / virpipe
+* software rendering
+* other fallback paths
+
+as independent implementations.
+
+---
+
+## Phase 7 — Camera
+
+Turn native and bridged camera paths into independent backends.
+
+---
+
+## Phase 8 — Remaining Modules
+
+Apply the architecture to:
+
+* Storage
+* Display
+* System D-Bus
+* FUSE
+* networking-related compatibility
+* other hardware/service modules
+
+---
+
+## Phase 9 — Remove Old Version Gating
+
+Audit uses of:
+
+```text
+getprop
+Android API level
+Android release
+manufacturer
+device model
+kernel version
+```
+
+Replace implementation decisions with real probes wherever possible.
+
+Keep platform facts where they are genuinely required or useful for diagnostics.
+
+---
+
+## Phase 10 — Overall Support Status
+
+Human-friendly statuses may remain:
+
+```text
+FULL
+PARTIAL
+MINIMAL
+UNSUPPORTED
+```
+
+but they will be **derived from module results**.
+
+Example:
+
+```text
+FULL
+    required core modules available
+
+PARTIAL
+    core available
+    optional hardware compatibility degraded
+
+MINIMAL
+    basic Linux environment works
+    major integrations unavailable
+
+UNSUPPORTED
+    required core capabilities unavailable
+```
+
+The module report remains the source of truth.
+
+---
+
+## Phase 11 — Unknown Device Testing
+
+The important test is not whether LSA works on another phone already listed in the code.
+
+The important test is whether LSA can encounter hardware it has never seen before and correctly figure it out.
+
+Testing will include:
+
+* the current N6000
+* clean Debian rootfs
+* missing optional dependencies
+* deliberately disabled high tiers
+* broken probe behavior
+* fallback after `ERROR`
+* fallback after `UNSUPPORTED`
+* partially failed startup
+* teardown after partial startup
+* restart
+* stale runtime state
+* unknown manufacturers
+* unknown Android releases
+* different kernels
+
+---
+
+## Phase 12 — New Known-Good Snapshot
+
+Once the architecture has proven itself, create another complete LSA known-good auto-deployment snapshot.
+
+---
+
+# Rules I Do Not Want This Refactor To Break
+
+1. **The current known-good configuration must keep working.**
+
+2. Working implementations should be wrapped before they are rewritten.
+
+3. Every subsystem owns its own tier definitions.
+
+4. Tier letters describe implementation preference, not universal technology classes.
+
+5. Modules communicate through capabilities instead of depending on another module's tier letter.
+
+6. Device model and Android version do not replace capability probing.
+
+7. `UNSUPPORTED` and `ERROR` mean different things.
+
+8. A broken high-tier backend should normally allow fallback.
+
+9. Probes should test real behavior, not just filenames or kernel config flags.
+
+10. Probes must clean up after themselves.
+
+11. Runtime state must record what LSA actually selected.
+
+12. Platform reports must describe reality instead of assumptions.
+
+13. Empty tier letters are allowed.
+
+14. Do not create fake compatibility paths just to make the tier list look complete.
+
+---
+
+# Where This Is Going
+
+The desired experience on an unknown rooted Android device is eventually:
+
+```text
+LSA:
+"I have never seen this phone before."
+
+"Let's see what it can do."
+```
+
+Then LSA probes:
+
+```text
+kernel
+mount behavior
+device namespaces
+FUSE
+GPU
+audio
+camera
+sensors
+IIO
+D-Bus
+display
+storage
+Android services
+...
+```
+
+and builds the system that best matches what is actually available.
+
+The result might be:
+
+```text
+LSA Platform Report
+────────────────────────────────────────
+
+Device namespace    TIER B / AVAILABLE
+Storage             TIER A / AVAILABLE
+System D-Bus        TIER A / AVAILABLE
+Display             TIER C / AVAILABLE
+GPU                 TIER C / AVAILABLE
+Audio               TIER A / AVAILABLE
+Camera              TIER C / AVAILABLE
+Sensors             TIER D / AVAILABLE
+
+Overall support      FULL
+```
+
+The fact that the phone model, kernel build, vendor, or Android release has never been tested before should not automatically matter.
+
+If the required primitives work, LSA should discover them.
+
+If the preferred implementation does not work, LSA should fall back.
+
+If something behaves incorrectly, LSA should report exactly what failed.
+
+## End Goal
+
+**LSA should adapt to the hardware and kernel it finds, not to a database of phones it already knows about.**
