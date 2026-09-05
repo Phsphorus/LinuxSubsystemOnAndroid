@@ -1,21 +1,24 @@
 # LSA
 
-### Linux Subsystem on Android
+## Linux Subsystem on Android
 
 LSA is an experimental Linux integration layer for rooted Android devices.
 
-The goal is not simply to run a Linux chroot on Android. LSA attempts to make the Linux environment behave like part of the device by bridging Android hardware, services, graphics, audio, sensors, networking, and device interfaces into a conventional Linux userspace.
+The goal is not simply to run Linux inside a chroot.
 
-Instead of expecting every Linux application to understand Android, LSA tries to make Android resources appear in forms Linux software already understands.
+LSA attempts to make a conventional Linux userspace behave like part of the Android device by bridging Android hardware, services, graphics, audio, sensors, networking, and device interfaces into forms Linux software already understands.
 
-> **Current status:** Pre-Alpha
-> **Current known-good snapshot:** `1.2.0.5-PreAlpha-KnownGood-FullStack-TierDComplete-20260901`
+Instead of requiring every Linux application to know how Android works, LSA tries to make Android resources appear as normal Linux resources.
+
+> **Project status:** Pre-Alpha
+> **Current known-good release:**
+> `1.2.0.5-PreAlpha-KnownGood-FullStack-TierDComplete-20260901`
 
 ---
 
-## What LSA currently consists of
+# Architecture
 
-LSA is split into two coordinated service trees:
+LSA currently consists of two coordinated service environments:
 
 ```text
 Android
@@ -31,14 +34,15 @@ Android
     ├── ModChroot
     ├── HALAgent / HALBridge
     ├── Termux:X11 integration
-    └── root-side hardware / namespace services
+    ├── namespace/device compatibility
+    └── root-side hardware services
             │
             ▼
       Debian-family rootfs
       /data/local/linux
 ```
 
-Startup order is intentionally:
+The intended startup order is:
 
 ```text
 NonRootStart
@@ -50,77 +54,300 @@ ModChroot
 Linux userspace
 ```
 
-NonRootStart services are treated as prerequisites. RootStart does not own or duplicate them.
+NonRootStart is intentionally a prerequisite of RootStart.
+
+RootStart does not attempt to start or duplicate services that belong to NonRootStart.
+
+---
+
+# Required Android environment
+
+LSA currently expects a specific Android-side Termux environment.
+
+Do **not** assume an arbitrary Play Store, F-Droid, or differently-versioned Termux installation will behave identically.
+
+The current known-good baseline is:
+
+## Termux
+
+**Termux 0.118.3**
+
+```text
+termux-app_v0.118.3+github-debug_arm64-v8a.apk
+```
+
+Official release:
+
+https://github.com/termux/termux-app/releases/download/v0.118.3/termux-app_v0.118.3+github-debug_arm64-v8a.apk
+
+---
+
+## Termux:API
+
+**Termux:API 0.53.0**
+
+```text
+termux-api-app_v0.53.0+github.debug.apk
+```
+
+Official release:
+
+https://github.com/termux/termux-api/releases/download/v0.53.0/termux-api-app_v0.53.0+github.debug.apk
+
+---
+
+## Termux:X11
+
+LSA also uses Termux:X11.
+
+The current LSA deployment snapshot can include the known-good Termux:X11 APK under:
+
+```text
+assets/termux-x11.apk
+```
+
+The deployment system can install the bundled Termux:X11 APK when it is not already present.
+
+---
+
+# Requirements
+
+Current LSA development assumes:
+
+* rooted Android device
+* ARM64 Android device for the current known-good Termux build
+* Termux `0.118.3`
+* Termux:API `0.53.0`
+* Termux:X11
+* Python inside Termux
+* `tar`
+* `sha256sum`
+* Debian-family ARM64 rootfs
+* root shell access
+* enough Android/Linux knowledge to recover the device if development software breaks something
+
+The current known-good environment is a development setup.
+
+Device portability is still under active development.
+
+---
+
+# SELinux
+
+Current development uses the:
+
+```text
+SELinux Permissive
+```
+
+lane.
+
+SELinux Enforcing support is a future/device-specific target.
+
+Do not currently assume that an arbitrary device will run the complete LSA stack correctly under Enforcing.
+
+---
+
+# Root filesystem
+
+LSA does **not** currently distribute the Debian rootfs as part of the LSA deployment snapshot.
+
+A compatible Debian-family rootfs is expected at:
+
+```text
+/data/local/linux
+```
+
+LSA-owned modifications to the Linux environment are carried primarily through ModChroot:
+
+* injects
+* hooks
+* mount modules
+* environment configuration
+* runtime provisioning
+
+This allows the rootfs itself to remain largely independent from the LSA release.
+
+---
+
+# RootStart
+
+RootStart contains services requiring Android root privileges.
+
+Canonical location:
+
+```text
+/data/local/RootStart
+```
+
+Current RootStart responsibilities include:
+
+* ModChroot
+* HALAgent / HALBridge
+* Termux:X11 root-side integration
+* root-side namespace management
+* hardware-facing compatibility services
+* startup validation
+* lifecycle management
+
+RootStart is started with:
+
+```sh
+/data/local/RootStart/RST.sh
+```
+
+It should be started only after NonRootStart is already running.
+
+---
+
+# NonRootStart
+
+NonRootStart contains services that are intentionally run as the normal Termux application user.
+
+Canonical location:
+
+```text
+/data/data/com.termux/files/home/NonRootStart
+```
+
+Current services include:
+
+* HALAudioS
+* GPUBridge
+* HALSensorBus
+* DNS support
+* supporting non-root services
+
+NonRootStart is started from Termux as the Termux user:
+
+```sh
+~/NonRootStart/NRS.sh
+```
+
+Do not start NonRootStart as root unless specifically debugging something that requires it.
 
 ---
 
 # ModChroot
 
-ModChroot is LSA's chroot lifecycle and compatibility layer.
+ModChroot is LSA's Linux lifecycle and compatibility layer.
 
-It is responsible for preparing the Linux environment rather than relying on a heavily modified rootfs image.
+It is responsible for preparing the Linux environment rather than requiring users to maintain a heavily modified Debian image.
 
 Current responsibilities include:
 
 * chroot lifecycle management
-* mount setup and teardown
-* environment provisioning
+* preflight checks
+* stale-session cleanup
+* mount setup
+* mount teardown
 * rootfs injection
-* startup hooks
-* service integration
+* environment provisioning
+* service hooks
 * DNS integration
-* GPUBridge exposure
-* HALBridge exposure
+* GPUBridge integration
+* HALBridge integration
 * `/dev/shm` provisioning
-* private Linux `/dev`
+* Linux-private `/dev`
 * Android device exposure through `/dev/.host`
 * sensor compatibility
-* cleanup and stale-session detection
+* runtime cleanup
+* process management
 
-LSA-owned changes to Debian are primarily carried as ModChroot injects and hooks and are applied when the environment is started.
-
-This allows the Debian rootfs itself to remain separate from LSA.
+LSA-owned Debian changes are applied through ModChroot during startup.
 
 ---
 
-# Android hardware integration
+# Device namespace
 
-LSA currently contains infrastructure for bridging Android functionality into Linux.
+Modern LSA does not simply expose Android's `/dev` directly as Debian's `/dev`.
 
-## HALBridge
+The Linux environment receives its own private device namespace:
 
-HALAgent runs on the Android/root side and exposes Android functionality to the Linux environment through HALBridge.
+```text
+/dev
+```
 
-The current stack contains support and infrastructure for areas including:
+Android's original device namespace remains accessible separately at:
 
-* audio
-* speakers
-* microphone
-* camera
-* GPS
-* CPU/device information
-* video-related interfaces
-* Android-side service dispatch
+```text
+/dev/.host
+```
 
-A per-installation authentication secret is generated during deployment rather than distributing the source device's secret.
+Conceptually:
 
-The Debian-side HALBridge view is exposed at:
+```text
+Android /dev
+     │
+     └──────────────► /dev/.host
+                           │
+                           │ LSA compatibility
+                           ▼
+                       Linux /dev
+```
+
+This gives LSA the ability to provide Linux-compatible devices and interfaces without directly altering Android's device namespace.
+
+---
+
+# HALBridge
+
+HALAgent runs on the Android/root side and exposes Android functionality to Linux through HALBridge.
+
+The Debian-side HALBridge interface is exposed at:
 
 ```text
 /mnt/halbridge
+```
+
+The current stack contains infrastructure covering areas including:
+
+* audio
+* speaker routing
+* microphone
+* camera
+* GPS
+* CPU information
+* device information
+* video-related interfaces
+* Android service dispatch
+
+A fresh authentication secret is generated during deployment.
+
+The authentication secret from the development/source device is intentionally not included in releases.
+
+Persistent HAL state lives under:
+
+```text
+/data/local/RootStart/Services/halagent/state
+```
+
+Shared Android staging storage is located at:
+
+```text
+/sdcard/halbridge
 ```
 
 ---
 
 # Audio
 
-LSA includes the HALAudio / HALAudioS audio path.
+LSA includes the:
 
-This provides an Android-backed audio path for Linux applications while allowing the Linux environment to continue using conventional audio interfaces.
+```text
+HALAudio
+HALAudioS
+```
 
-HALAudioS is a NonRootStart service and is started before the root-side LSA stack.
+audio path.
 
-Audio integration is still under active development and compatibility varies by application and device.
+HALAudioS is part of NonRootStart and therefore comes online before RootStart and ModChroot.
+
+The goal is to provide Android-backed audio while exposing interfaces Linux applications can use conventionally.
+
+Current audio support is functional but remains under active development.
+
+Application and device compatibility may vary.
 
 ---
 
@@ -129,26 +356,52 @@ Audio integration is still under active development and compatibility varies by 
 Current graphics infrastructure includes:
 
 * GPUBridge
-* VirGL infrastructure
-* Termux:X11 integration
-* Linux GPU socket exposure through `/mnt/gpubridge`
+* VirGL
+* Termux:X11
+* Android-side GPU access
+* Linux-side GPU socket exposure
+* experimental direct frame transport work
 
-Graphics and display integration are still one of the most actively developed parts of LSA.
+GPUBridge is exposed inside Linux through:
 
-The long-term objective is to reduce the number of Android-specific assumptions applications need to make and provide a Linux graphics environment backed by the Android device's hardware.
+```text
+/mnt/gpubridge
+```
+
+Graphics remain one of the most actively developed parts of LSA.
+
+The broader goal is:
+
+```text
+Linux application
+       │
+       ▼
+Linux graphics API
+       │
+       ▼
+LSA / VirGL / GPUBridge
+       │
+       ▼
+Android GPU stack
+       │
+       ▼
+Physical GPU
+```
+
+LSA is intended to reduce the amount of Android-specific knowledge required by Linux applications.
 
 ---
 
 # Sensors
 
-LSA contains a Linux sensor compatibility layer designed around Linux IIO interfaces.
+LSA contains a Linux sensor compatibility layer centered around Linux IIO.
 
-The current sensor stack includes:
+Current infrastructure includes:
 
 * HALSensorBus
-* dynamic sensor discovery
-* dynamic IIO registry generation
-* synthetic IIO devices
+* Android sensor discovery
+* dynamic sensor registry
+* synthetic Linux IIO devices
 * stream sensors
 * state sensors
 * event sensors
@@ -157,201 +410,255 @@ The current sensor stack includes:
 * IIO state broker
 * IIO event broker
 * target-native event `ioctl` shim
-* session-scoped event shim environment
+* session-scoped transparent event shim environment
 
-The Linux sensor runtime lives at:
+The sensor source tree is located at:
+
+```text
+/data/local/RootStart/Services/ModChroot/LSA/Sensors
+```
+
+Runtime sensor state inside Debian is located at:
 
 ```text
 /run/lsa-iio
 ```
 
-and synthetic devices are exposed through the normal Linux IIO path:
+Synthetic IIO devices are exposed through:
 
 ```text
 /sys/bus/iio/devices
 ```
 
-This is intended to allow Linux software to consume Android sensors without requiring application-specific Android code.
-
----
-
-# Device namespace
-
-Modern LSA does not simply expose Android's `/dev` directly as the Linux `/dev`.
-
-The Debian environment receives its own private device namespace.
-
-```text
-/dev
-```
-
-is the Linux-facing namespace.
-
-Android's underlying device namespace is available separately at:
-
-```text
-/dev/.host
-```
-
-This gives LSA room to provide Linux-compatible virtual or translated devices without modifying Android's own `/dev`.
+The goal is for normal Linux applications to interact with Android sensors through interfaces resembling native Linux hardware.
 
 ---
 
 # Current release
 
-## `1.2.0.1-PreAlpha-KnownGood-FullStack-TierDComplete-20260901`
+## `1.2.0.5-PreAlpha-KnownGood-FullStack-TierDComplete-20260901`
 
-This is a known-good full-stack development snapshot.
+This release represents the current known-good full-stack LSA development snapshot.
 
-The deployment kit contains:
+Typical deployment kit structure:
 
 ```text
-README.txt
-VERSION
-deploy.sh
-
-assets/
-    termux-x11.apk
-
-manifest/
-    PAYLOAD-SHA256SUMS
-    SOURCE_PATHS.txt
-    TREE.txt
-    build-info.txt
-    debian-packages.txt
-    termux-packages.txt
-
-payload/
-    RootStart.tar
-    NonRootStart.tar
+LSA-1.2.0.5-PreAlpha-KnownGood-FullStack-TierDComplete-20260901-Autodeploy/
+│
+├── README.txt
+├── VERSION
+├── deploy.sh
+│
+├── assets/
+│   └── termux-x11.apk
+│
+├── manifest/
+│   ├── PAYLOAD-SHA256SUMS
+│   ├── SOURCE_PATHS.txt
+│   ├── TREE.txt
+│   ├── build-info.txt
+│   ├── debian-packages.txt
+│   └── termux-packages.txt
+│
+└── payload/
+    ├── RootStart.tar
+    └── NonRootStart.tar
 ```
 
-### Included
+---
 
-The snapshot contains the complete project-owned:
+# Included in the release
 
-* `RootStart`
-* `NonRootStart`
-* ModChroot lifecycle
-* ModChroot mount modules
-* hooks
+The full-stack deployment snapshot includes the complete current project-owned:
+
+* RootStart tree
+* NonRootStart tree
+* ModChroot
+* ModChroot lifecycle implementation
+* mount modules
 * environment modules
+* startup hooks
 * rootfs injects
-* HALAgent / HALBridge
-* HALAudio / HALAudioS
-* DNS service
+* HALAgent
+* HALBridge
+* HALAudio
+* HALAudioS
+* DNS support
 * GPUBridge
-* Termux:X11 integration
+* Termux:X11 RootStart integration
 * HALSensorBus
-* LSA Sensors source/proven trees
+* LSA Sensors source tree
+* LSA Sensors proven tree
 * Tier-D private `/dev`
 * Tier-D FUSE IIO compatibility
-* stream/state/event IIO brokers
-* dynamic sensor registry
-* native IIO event shim source/build path
-* package manifests
-* payload manifests
-* payload checksums
+* IIO stream broker
+* IIO state broker
+* IIO event broker
+* dynamic IIO registry
+* target-native event ioctl shim source/build path
+* transparent event shim environment
+* Termux package manifest
+* Debian package manifest
+* source-tree manifest
+* payload SHA-256 checksums
+* current Termux:X11 APK when available
 
-### Intentionally NOT included
+---
 
-The snapshot does **not** contain:
+# Not included
 
-* a Debian rootfs
-* live PID files
+The deployment snapshot intentionally does **not** include:
+
+* `/data/local/linux` Debian rootfs
+* live process IDs
 * live sockets
 * runtime logs
 * runtime caches
 * captured camera data
-* captured microphone/recording data
-* the source device's HALBridge authentication secret
+* captured microphone data
+* recording runtime data
+* the development device's HALBridge authentication secret
+
+These are either system-specific, volatile, private, or too large to belong in the portable LSA snapshot.
 
 ---
 
-# Requirements
+# Deployment behavior
 
-LSA is currently a development project.
+The auto-deployer currently:
 
-You should expect to need:
-
-* a rooted Android device
-* Termux
-* Python in Termux
-* `tar`
-* `sha256sum`
-* a Debian-family rootfs
-* shell/root access
-* familiarity with recovering a rooted Android installation if something breaks
-
-The Debian rootfs is expected at:
-
-```text
-/data/local/linux
-```
-
-The normal Termux location is expected:
-
-```text
-/data/data/com.termux/files/home
-```
-
-### SELinux
-
-Current development and known-good testing use the **SELinux Permissive** development lane.
-
-SELinux Enforcing compatibility is a future/device-specific target and should not currently be assumed.
+1. verifies the bundled payload checksums
+2. checks that it is running as root
+3. verifies the expected Termux environment
+4. verifies that a Debian-family rootfs exists
+5. refuses to overwrite a running ModChroot session
+6. detects the target Termux UID and GID
+7. backs up the existing RootStart tree
+8. backs up the existing NonRootStart tree
+9. extracts the complete RootStart payload
+10. extracts the complete NonRootStart payload
+11. applies the correct Termux ownership
+12. creates fresh runtime directories
+13. generates a fresh HALBridge authentication secret
+14. prepares shared HALBridge storage
+15. optionally installs the bundled Termux:X11 APK
+16. verifies critical LSA / Tier-D files
 
 ---
 
 # Installation
 
-This release does **not** contain the Debian rootfs itself.
+## 1. Install the required Android applications
 
-First place a compatible Debian-family rootfs at:
+Install the current known-good Termux build:
+
+```text
+Termux 0.118.3
+termux-app_v0.118.3+github-debug_arm64-v8a.apk
+```
+
+Install the current known-good Termux:API build:
+
+```text
+Termux:API 0.53.0
+termux-api-app_v0.53.0+github.debug.apk
+```
+
+Install or allow LSA to install the required Termux:X11 build.
+
+---
+
+## 2. Prepare Termux
+
+LSA expects Termux at its normal Android location:
+
+```text
+/data/data/com.termux/files
+```
+
+The Termux home directory should therefore be:
+
+```text
+/data/data/com.termux/files/home
+```
+
+Required Termux-side tools include at minimum:
+
+```text
+python
+tar
+sha256sum
+```
+
+Additional package requirements can be determined from the included:
+
+```text
+manifest/termux-packages.txt
+```
+
+---
+
+## 3. Prepare Debian
+
+Place the compatible Debian-family rootfs at:
 
 ```text
 /data/local/linux
 ```
 
-Then copy/extract the LSA deployment kit onto the Android device.
+Package information from the known-good development rootfs is included in:
 
-Run the deployment script as root:
+```text
+manifest/debian-packages.txt
+```
+
+The rootfs itself is not included with LSA.
+
+---
+
+## 4. Deploy LSA
+
+Copy or extract the LSA deployment kit onto the Android device.
+
+Run:
 
 ```sh
 ./deploy.sh
 ```
 
-The deployer will:
+as root.
 
-* verify payload checksums
-* refuse to overwrite a running LSA installation
-* back up an existing RootStart installation
-* back up an existing NonRootStart installation
-* install the current payload
-* adapt NonRootStart ownership to the device's Termux UID/GID
-* recreate clean runtime directories
-* generate a new HALBridge authentication secret
-* prepare shared HALBridge storage
-* optionally install the bundled Termux:X11 APK
-* verify critical LSA files
+The deployment system will install RootStart and NonRootStart and prepare the target environment.
 
 ---
 
 # Starting LSA
 
-Start **NonRootStart first as the Termux user**:
+## Step 1 — NonRootStart
+
+Open normal Termux.
+
+Run as the Termux user:
 
 ```sh
 ~/NonRootStart/NRS.sh
 ```
 
-Then start **RootStart as root**:
+NonRootStart should remain active.
+
+---
+
+## Step 2 — RootStart
+
+Enter a root shell.
+
+Run:
 
 ```sh
 /data/local/RootStart/RST.sh
 ```
 
-RootStart assumes NonRootStart services already exist.
+RootStart assumes the required NonRootStart services are already available.
 
 ---
 
@@ -379,7 +686,7 @@ LSA sensor runtime
 Linux private device namespace
 /dev
 
-Android device namespace inside Linux
+Android device namespace exposed inside Linux
 /dev/.host
 
 HALBridge
@@ -388,37 +695,15 @@ HALBridge
 GPUBridge
 /mnt/gpubridge
 
-Shared Android staging
+Shared Android HAL staging
 /sdcard/halbridge
 ```
 
 ---
 
-# Project status
+# Project design
 
-LSA is **Pre-Alpha**.
-
-Things working in the development stack should not yet be interpreted as guarantees across arbitrary Android devices.
-
-A lot of the current work is focused on creating compatibility layers at the boundary between Android and Linux rather than modifying individual Linux programs.
-
-Major active areas include:
-
-* graphics/display integration
-* GPUBridge
-* Termux:X11 integration
-* hardware compatibility
-* sensor compatibility
-* audio compatibility
-* ModChroot portability
-* device-independent bootstrap/deployment
-* reducing device-specific assumptions
-
----
-
-# Design goal
-
-The end goal of LSA is approximately:
+The basic LSA philosophy is:
 
 ```text
 Linux application
@@ -427,7 +712,7 @@ Linux application
        ▼
 Linux-compatible interface
        │
-       │ LSA bridge / translation
+       │ LSA translation / bridge
        ▼
 Android kernel / framework / HAL
        │
@@ -435,14 +720,177 @@ Android kernel / framework / HAL
 Phone hardware
 ```
 
-The Linux application ideally should not need to know that it is running on Android.
+The application ideally should not need to know that the underlying machine is Android.
 
-LSA handles the ugly part.
+For example:
+
+```text
+Linux sensor application
+        │
+        ▼
+/sys/bus/iio/devices
+        │
+        ▼
+LSA synthetic IIO stack
+        │
+        ▼
+HALSensorBus
+        │
+        ▼
+Android sensors
+```
+
+or:
+
+```text
+Linux graphics application
+        │
+        ▼
+Linux graphics stack
+        │
+        ▼
+VirGL / GPUBridge
+        │
+        ▼
+Android GPU
+```
+
+or:
+
+```text
+Linux device access
+        │
+        ▼
+/dev
+        │
+        ▼
+LSA private device namespace
+        │
+        ├── Linux-compatible virtual devices
+        │
+        └── /dev/.host
+                │
+                ▼
+           Android devices
+```
+
+LSA handles the translation layer between the two operating environments.
 
 ---
 
-## License
+# What LSA is not
+
+LSA is not:
+
+* a normal Termux distro wrapper
+* proot
+* a Linux emulator
+* a virtual machine
+* just a Debian chroot
+* a desktop launcher
+* a collection of isolated Android control scripts
+
+The chroot is only one component.
+
+LSA's purpose is the compatibility infrastructure surrounding it.
+
+---
+
+# Current status
+
+LSA is still **Pre-Alpha**.
+
+The current release is a known-good development snapshot, not a universal stable release.
+
+Known-good functionality does not yet imply compatibility across arbitrary:
+
+* phones
+* Android versions
+* kernels
+* vendors
+* SoCs
+* GPU drivers
+* sensor HAL implementations
+
+Current major development areas include:
+
+* graphics and display integration
+* direct frame transport
+* GPUBridge
+* Termux:X11 integration
+* hardware abstraction
+* Android/Linux device translation
+* Linux sensor compatibility
+* audio compatibility
+* rootfs portability
+* ModChroot portability
+* automated bootstrap
+* reducing device-specific assumptions
+* eventually supporting SELinux Enforcing configurations
+
+---
+
+# Development model
+
+LSA development currently follows known-good snapshots.
+
+A snapshot represents a stack that has been tested together:
+
+```text
+Android environment
++
+Termux environment
++
+NonRootStart
++
+RootStart
++
+ModChroot
++
+Linux rootfs
++
+LSA compatibility layers
+```
+
+This is important because many parts of LSA interact with boundaries Android normally does not expose as traditional Linux interfaces.
+
+The current known-good release is:
+
+```text
+1.2.0.5-PreAlpha-KnownGood-FullStack-TierDComplete-20260901
+```
+
+---
+
+# Warning
+
+LSA runs with root privileges and modifies the runtime environment of a rooted Android device.
+
+This is development software.
+
+It can break.
+
+Do not test LSA on a device you cannot recover.
+
+You should be comfortable with:
+
+* ADB
+* root shells
+* Android filesystem layout
+* Linux mounts
+* process management
+* recovering boot/runtime problems
+
+before treating the current Pre-Alpha builds as anything other than development software.
+
+---
+
+# License
 
 Apache License 2.0
 
-See `LICENSE`.
+See:
+
+```text
+LICENSE
+```
