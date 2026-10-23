@@ -1014,3 +1014,5 @@ If something behaves incorrectly, LSA should report exactly what failed.
 ## End Goal
 
 **LSA should adapt to the hardware and kernel it finds, not to a database of phones it already knows about.**
+
+Switch to semver at some point soon.
