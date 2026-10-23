@@ -1,0 +1,76 @@
+Canonical installed locations:
+
+RootStart:
+    /data/local/RootStart
+
+NonRootStart:
+    /data/data/com.termux/files/home/NonRootStart
+
+Debian-family rootfs expected at:
+    /data/local/linux
+
+HAL persistent state:
+    /data/local/RootStart/Services/halagent/state
+
+LSA sensor implementation source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/Sensors/implementation
+
+Android Camera and Location provider source:
+    /data/data/com.termux/files/home/NonRootStart/Providers/Android/Capture
+
+Android Audio provider source:
+    /data/data/com.termux/files/home/NonRootStart/Providers/Android/Audio
+
+Android GPUBridge provider source:
+    /data/data/com.termux/files/home/NonRootStart/Providers/Android/GPUBridge
+
+Linux GPU module source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/GPU/implementation
+
+Android Termux:X11 provider source:
+    /data/local/RootStart/Providers/Android/TermuxX11
+
+Linux Display module source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/Display/implementation
+
+Linux FUSE module source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/FUSE/implementation
+
+Linux D-Bus module source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/DBus/implementation
+
+Linux Audio module source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/Audio/implementation
+
+N6000 device VideoEncode provider source:
+    /data/data/com.termux/files/home/NonRootStart/Providers/Devices/Blackview/N6000/VideoEncode
+
+Linux VideoEncode module source:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules/VideoEncode/implementation
+
+Capability framework:
+    /data/local/RootStart/Services/ModChroot/LSA/Framework
+
+Capability providers:
+    /data/local/RootStart/Services/ModChroot/LSA/Providers
+
+Module backend descriptors and implementations:
+    /data/local/RootStart/Services/ModChroot/LSA/Modules
+
+LSA sensor runtime in Debian:
+    /run/lsa-iio
+
+Debian private device namespace:
+    /dev
+
+Android device namespace exposed inside Debian:
+    /dev/.host
+
+Debian HALBridge view:
+    /mnt/halbridge
+
+GPUBridge socket view:
+    /mnt/gpubridge
+
+Shared Android staging:
+    /sdcard/halbridge

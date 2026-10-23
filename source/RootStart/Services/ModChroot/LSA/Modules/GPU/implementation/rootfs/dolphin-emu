@@ -1,0 +1,18 @@
+#!/bin/sh
+# The Android GLES VirGL provider currently lacks GL_EXT_clip_cull_distance.
+# Dolphin's stock OpenGL shaders require it, and sending Dolphin through
+# virpipe therefore makes virglrenderer reject the command stream.  Keep the
+# emulator usable with Mesa's normal renderer until the provider advertises
+# that capability.  Developers can still reproduce and qualify the provider
+# failure explicitly with LSA_FORCE_UNSUPPORTED_VIRGL=1.
+
+if [ "${LSA_FORCE_UNSUPPORTED_VIRGL:-0}" != 1 ]; then
+    unset VTEST_SOCKET_NAME
+    unset LIBGL_ALWAYS_SOFTWARE
+    unset GALLIUM_DRIVER
+    unset MESA_GL_VERSION_OVERRIDE
+    unset MESA_GLSL_VERSION_OVERRIDE
+    printf '%s\n' 'LSA GPUBridge: Dolphin needs GL_EXT_clip_cull_distance; using the compatible Mesa fallback.' >&2
+fi
+
+exec /usr/games/dolphin-emu "$@"

@@ -1,0 +1,11 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+GPU_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$GPU_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_gpu_virgl_probe() {
+    printf 'generic Linux VirGL consumer can use a supplied render capability'
+}
+
+lsa_backend_register gpu.virgl GPU A 90000 'capability.linux.chroot;capability.gpu.render.virgl;capability.gpu.shared-memory' 'capability.gpu.render;capability.gpu.linux-render' backend_gpu_virgl_probe backend_gpu_virgl_start backend_gpu_virgl_stop backend_gpu_virgl_status ANDROID_GENERIC NO

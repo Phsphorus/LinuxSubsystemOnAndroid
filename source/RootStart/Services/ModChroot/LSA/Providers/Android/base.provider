@@ -1,0 +1,36 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+provider_android_rootfs_probe() {
+    [ "$(id -u)" = 0 ] || { printf 'root context is required'; return 3; }
+    [ -x "$LSA_CHROOT_DIR/bin/sh" ] || { printf 'chroot shell missing: %s/bin/sh' "$LSA_CHROOT_DIR"; return 3; }
+    command -v mount >/dev/null 2>&1 || { printf 'mount command unavailable'; return 3; }
+    printf 'root and bootable chroot rootfs are present'
+}
+
+provider_android_rootfs_status() {
+    if lsa_compat_mount_present "$LSA_CHROOT_DIR/proc"; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_termux_probe() {
+    [ -x "$LSA_TERMUX_PREFIX/bin/bash" ] || { printf 'Termux bash missing'; return 3; }
+    [ -f "$LSA_NONROOT_BASE/NRS.sh" ] || { printf 'NonRootStart launcher missing'; return 3; }
+    printf 'Termux runtime and NonRootStart launcher are installed'
+}
+
+provider_android_termux_status() {
+    if [ -e "$LSA_NONROOT_BASE/Services/SWITCH" ]; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_fuse_probe() {
+    [ -e /dev/fuse ] || { printf '/dev/fuse is absent'; return 3; }
+    [ -e "$LSA_CHROOT_DIR/dev/fuse" ] || { printf 'Linux private /dev/fuse is absent'; return 3; }
+    printf 'kernel and Linux private FUSE devices are present'
+}
+
+provider_android_fuse_status() {
+    if [ -e "$LSA_CHROOT_DIR/dev/fuse" ]; then printf RUNNING; else printf STOPPED; fi
+}
+
+lsa_provider_register android.rootfs ANDROID_GENERIC 100000 '' 'capability.host.root;capability.chroot.rootfs;capability.mount;capability.device.host' provider_android_rootfs_probe provider_android_rootfs_status
+lsa_provider_register android.termux ANDROID_GENERIC 95000 '' 'capability.android.termux;capability.unix.socket' provider_android_termux_probe provider_android_termux_status
+lsa_provider_register android.fuse ANDROID_GENERIC 80000 'capability.host.root;capability.chroot.rootfs;capability.fuse.kernel' 'capability.fuse.mount' provider_android_fuse_probe provider_android_fuse_status

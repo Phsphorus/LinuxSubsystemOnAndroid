@@ -1,0 +1,22 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+backend_device_private_dev_probe() {
+    [ -f "$LSA_FRAMEWORK_BASE/../Modules/DeviceNamespace/implementation/private-dev.sh" ] || { printf 'private /dev implementation is missing'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Modules/DeviceNamespace/implementation/shared-memory.sh" ] || { printf 'private /dev/shm implementation is missing'; return 3; }
+    printf 'module-owned private tmpfs /dev and host read-through implementation are installed'
+}
+
+backend_device_private_dev_start() {
+    backend_device_private_dev_status | grep -qx RUNNING || { printf 'DeviceNamespace bootstrap is not mounted'; return 1; }
+    printf 'DeviceNamespace bootstrap already active'
+}
+
+backend_device_private_dev_stop() {
+    printf 'DeviceNamespace reverse mount lifecycle runs during root-session teardown'
+}
+
+backend_device_private_dev_status() {
+    if lsa_compat_mount_present "$LSA_CHROOT_DIR/dev/.host" && lsa_compat_mount_present "$LSA_CHROOT_DIR/dev/pts" && lsa_compat_mount_present "$LSA_CHROOT_DIR/dev/shm"; then printf RUNNING; else printf STOPPED; fi
+}
+
+lsa_backend_register device.private-dev DeviceNamespace B 89000 'capability.linux.chroot;capability.device.host' 'capability.device.private;capability.device.private.shm;capability.device.host-view' backend_device_private_dev_probe backend_device_private_dev_start backend_device_private_dev_stop backend_device_private_dev_status ANDROID_GENERIC NO

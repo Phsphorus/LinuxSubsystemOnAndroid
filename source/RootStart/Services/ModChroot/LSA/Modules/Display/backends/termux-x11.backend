@@ -1,0 +1,12 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+DISPLAY_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DISPLAY_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_display_termux_x11_probe() {
+    [ -x "$LSA_ROOTSTART_BASE/Providers/Android/TermuxX11/lifecycle.sh" ] || { printf 'Termux:X11 provider is absent'; return 3; }
+    printf 'Termux:X11 Linux display adapter is installed'
+}
+
+lsa_backend_register display.termux-x11 Display C 80000 'capability.linux.chroot;capability.display.termux-x11' 'capability.display.linux' backend_display_termux_x11_probe backend_display_termux_x11_start backend_display_termux_x11_stop backend_display_termux_x11_status ANDROID_GENERIC NO

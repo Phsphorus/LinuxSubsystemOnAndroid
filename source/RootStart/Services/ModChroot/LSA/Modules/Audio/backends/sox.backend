@@ -1,0 +1,11 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+backend_audio_sox_probe() {
+    [ -x "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" ] || { printf 'Audio module lifecycle missing'; return 3; }
+    printf 'Linux Pulse/ALSA can stream raw PCM through Termux SoX'
+}
+backend_audio_sox_start() { LSA_AUDIO_BACKEND=sox "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" start; }
+backend_audio_sox_stop() { "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" stop; }
+backend_audio_sox_status() { [ -S "$LSA_CHROOT_DIR/tmp/pa-run/pulse/native" ] && printf RUNNING || printf STOPPED; }
+
+lsa_backend_register audio.sox Audio C 70000 'capability.linux.chroot;capability.audio.sox' 'capability.audio.linux;capability.audio.alsa-pulse' backend_audio_sox_probe backend_audio_sox_start backend_audio_sox_stop backend_audio_sox_status ANDROID_GENERIC NO

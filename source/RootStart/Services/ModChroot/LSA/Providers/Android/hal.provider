@@ -1,0 +1,77 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+provider_android_sensorbus_probe() {
+    local android_library
+    [ -f "$LSA_NONROOT_BASE/Services/HALSensorBus/HALSensorBus.py" ] || { printf 'HALSensorBus source missing'; return 3; }
+    [ -x "$LSA_TERMUX_PREFIX/bin/python" ] || { printf 'Termux Python missing'; return 3; }
+    android_library="$(lsa_architecture_android_system_library libandroid.so 2>/dev/null || true)"
+    [ -n "$android_library" ] || { printf 'Android NDK library missing for detected Android ABI'; return 3; }
+    printf 'Termux SensorManager bridge is installed'
+}
+
+provider_android_sensorbus_status() {
+    if lsa_compat_pid_file_running "$LSA_NONROOT_BASE/Services/HALSensorBus/run/HALSensorBus.pid"; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_audio_probe() {
+    local android_library
+    [ -x "$LSA_NONROOT_BASE/Providers/Android/Audio/lifecycle.sh" ] || { printf 'Android Audio provider lifecycle missing'; return 3; }
+    [ -f "$LSA_NONROOT_BASE/Providers/Android/Audio/implementation/provider.py" ] || { printf 'Android Audio provider source missing'; return 3; }
+    android_library="$(lsa_architecture_android_system_library libaaudio.so 2>/dev/null || true)"
+    [ -n "$android_library" ] || { printf 'Android AAudio library missing for detected Android ABI'; return 3; }
+    printf 'Termux-user Android Audio provider is installed'
+}
+
+provider_android_audio_status() {
+    if lsa_compat_pid_file_running "$LSA_NONROOT_BASE/Providers/Android/Audio/run/provider.pid"; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_halagent_probe() {
+    [ -f "$LSA_ROOTSTART_BASE/Services/halagent/halagent.py" ] || { printf 'HALAgent source missing'; return 3; }
+    [ -f "$LSA_ROOTSTART_BASE/Services/halagent/start.sh" ] || { printf 'HALAgent launcher missing'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Providers/Android/HALAgent/implementation/mounts.sh" ] || { printf 'HALAgent mount implementation is missing'; return 3; }
+    printf 'root HALAgent and Android staging bridge are installed'
+}
+
+provider_android_halagent_status() {
+    if pgrep -f "$LSA_ROOTSTART_BASE/Services/halagent/halagent.py" >/dev/null 2>&1; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_gpubridge_probe() {
+    local icd
+    [ -x "$LSA_NONROOT_BASE/Providers/Android/GPUBridge/lifecycle.sh" ] || { printf 'Android GPUBridge lifecycle missing'; return 3; }
+    [ -x "$LSA_NONROOT_BASE/Providers/Android/GPUBridge/implementation/server.sh" ] || { printf 'Android GPUBridge server missing'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Providers/Android/GPUBridge/implementation/mounts.sh" ] || { printf 'GPUBridge mount implementation is missing'; return 3; }
+    [ -x "$LSA_TERMUX_PREFIX/bin/virgl_test_server" ] || { printf 'virgl_test_server missing'; return 3; }
+    icd="$(lsa_architecture_termux_vulkan_icd 2>/dev/null || true)"
+    [ -n "$icd" ] || { printf 'ANGLE Vulkan ICD missing for detected Termux architecture'; return 3; }
+    printf 'VirGL/ANGLE GPU bridge is installed'
+}
+
+provider_android_gpubridge_status() {
+    if [ -S "$LSA_NONROOT_BASE/Providers/Android/GPUBridge/run/.virgl_test" ]; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_display_probe() {
+    local apk timeout_cmd
+    [ -x "$LSA_ROOTSTART_BASE/Providers/Android/TermuxX11/lifecycle.sh" ] || { printf 'Termux:X11 provider lifecycle missing'; return 3; }
+    [ -x "$LSA_ROOTSTART_BASE/Providers/Android/TermuxX11/implementation/server.sh" ] || { printf 'Termux:X11 provider implementation missing'; return 3; }
+    timeout_cmd="${LSA_TERMUX_PREFIX:-/data/data/com.termux/files/usr}/bin/timeout"
+    if [ -x "$timeout_cmd" ]; then
+        apk="$("$timeout_cmd" 5 /system/bin/pm path com.phsphorus.lsa.x11 2>/dev/null | sed -n '1s/^package://p')"
+    else
+        apk="$(/system/bin/pm path com.phsphorus.lsa.x11 2>/dev/null | sed -n '1s/^package://p')"
+    fi
+    [ -n "$apk" ] || { printf 'Termux:X11 Android package is not installed'; return 3; }
+    printf 'Termux:X11 integration and Android package are installed'
+}
+
+provider_android_display_status() {
+    if [ -S "$LSA_CHROOT_DIR/tmp/.X11-unix/X0" ] && "$LSA_ROOTSTART_BASE/Providers/Android/TermuxX11/lifecycle.sh" status | grep -qx RUNNING; then printf RUNNING; else printf STOPPED; fi
+}
+
+lsa_provider_register android.sensorbus ANDROID_GENERIC 90000 'capability.android.termux' 'capability.sensorbus' provider_android_sensorbus_probe provider_android_sensorbus_status
+lsa_provider_register android.halaudio ANDROID_GENERIC 89000 'capability.android.termux' 'capability.audio.aaudio;capability.audio.pulse' provider_android_audio_probe provider_android_audio_status
+lsa_provider_register android.halagent ANDROID_GENERIC 88000 'capability.host.root;capability.android.termux' 'capability.android.halagent;capability.android.control' provider_android_halagent_probe provider_android_halagent_status
+lsa_provider_register android.gpubridge ANDROID_GENERIC 87000 'capability.android.termux;capability.unix.socket' 'capability.gpu.render.virgl;capability.gpu.shared-memory' provider_android_gpubridge_probe provider_android_gpubridge_status
+lsa_provider_register android.termux-x11 ANDROID_GENERIC 86000 'capability.host.root;capability.android.termux' 'capability.display.termux-x11' provider_android_display_probe provider_android_display_status

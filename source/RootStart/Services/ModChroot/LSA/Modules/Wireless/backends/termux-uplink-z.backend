@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+WIRELESS_Z_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$WIRELESS_Z_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_wireless_termux_uplink_probe() {
+    local interface
+    interface="$(wireless_primary_interface)"
+    [ -n "$interface" ] || { printf 'Termux has no visible Android wireless uplink'; return 3; }
+    [ -r /proc/net/route ] || { printf 'host routing table is unavailable'; return 3; }
+    printf 'Termux-compatible Android uplink can provide normal Linux sockets through %s' "$interface"
+}
+
+backend_wireless_termux_uplink_start() { wireless_start_termux_uplink; }
+backend_wireless_termux_uplink_stop() { wireless_stop_owned termux-uplink; }
+backend_wireless_termux_uplink_status() { wireless_status_owned termux-uplink; }
+backend_wireless_termux_uplink_health() { wireless_health_termux_uplink; }
+
+lsa_backend_register wireless.termux-uplink Wireless Z 0 'capability.linux.chroot;capability.android.termux' 'capability.wireless.linux.sockets' backend_wireless_termux_uplink_probe backend_wireless_termux_uplink_start backend_wireless_termux_uplink_stop backend_wireless_termux_uplink_status GENERIC NO backend_wireless_termux_uplink_health

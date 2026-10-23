@@ -1,0 +1,27 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+backend_sensors_fuse_iio_probe() {
+    [ -x "$LSA_FRAMEWORK_BASE/../Modules/Sensors/implementation/lifecycle.sh" ] || { printf 'Sensors module lifecycle is missing'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Modules/Sensors/implementation/src/LSAIIORegistry.py" ] || { printf 'module-owned IIO registry source is missing'; return 3; }
+    printf 'module-owned SensorBus to synthetic IIO implementation is installed'
+}
+
+backend_sensors_fuse_iio_start() {
+    "$LSA_FRAMEWORK_BASE/../Modules/Sensors/implementation/lifecycle.sh" start
+}
+
+backend_sensors_fuse_iio_stop() {
+    "$LSA_FRAMEWORK_BASE/../Modules/Sensors/implementation/lifecycle.sh" stop
+}
+
+backend_sensors_fuse_iio_status() {
+    if [ -S "$LSA_CHROOT_DIR/run/lsa-iio/state.sock" ] && [ -S "$LSA_CHROOT_DIR/run/lsa-iio/events.sock" ] && lsa_compat_mount_present "$LSA_CHROOT_DIR/tmp/lsa-iio"; then
+        printf RUNNING
+    elif lsa_compat_mount_present "$LSA_CHROOT_DIR/tmp/lsa-iio"; then
+        printf DEGRADED
+    else
+        printf STOPPED
+    fi
+}
+
+lsa_backend_register sensors.fuse-iio Sensors D 7000 'capability.linux.chroot;capability.device.private;capability.fuse.mount;capability.sensorbus;capability.unix.socket' 'capability.linux.iio;capability.linux.iio-events;capability.linux.sensorproxy' backend_sensors_fuse_iio_probe backend_sensors_fuse_iio_start backend_sensors_fuse_iio_stop backend_sensors_fuse_iio_status ANDROID_GENERIC NO

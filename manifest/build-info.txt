@@ -1,0 +1,7 @@
+LSA public source release: 1.4.1.8#CoreCompat
+
+This public export intentionally excludes source-device runtime metadata,
+operator authentication material, local paths, and runtime logs.
+
+The documented Blackview N6000 compatibility evidence is retained in
+docs/COMPATIBILITY_MATRIX.md and related architecture documentation.

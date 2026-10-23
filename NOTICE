@@ -1,0 +1,7 @@
+LSA — Linux Subsystem on Android
+Copyright 2026 Phsphorus
+
+The original LSA source and deployment material identified in
+SOURCE_AVAILABILITY.md are licensed under the Apache License, Version 2.0.
+Bundled Android applications remain separately licensed as described in
+THIRD_PARTY_NOTICES.md and manifest/SOURCES.tsv.

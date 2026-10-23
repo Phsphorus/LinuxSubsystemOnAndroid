@@ -1,0 +1,27 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+LSA_ANDROID_CAPTURE_CONTROL="${LSA_ANDROID_CAPTURE_CONTROL:-$LSA_NONROOT_BASE/Providers/Android/Capture/control.py}"
+
+backend_location_android_gpsd_probe() {
+    [ -f "$LSA_ANDROID_CAPTURE_CONTROL" ] || { printf 'Termux Android capture provider control client is missing'; return 3; }
+    printf 'Android location API is exposed through the GPSD JSON protocol'
+}
+
+backend_location_android_gpsd_start() {
+    "$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" location start
+}
+
+backend_location_android_gpsd_stop() {
+    "$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" location stop
+}
+
+backend_location_android_gpsd_status() {
+    local response
+    response="$("$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" location status 2>/dev/null)" || { printf STOPPED; return 0; }
+    case "$response" in
+        *'"location_active":true'*) printf RUNNING ;;
+        *) printf STOPPED ;;
+    esac
+}
+
+lsa_backend_register location.android-gpsd Location C 90000 'capability.linux.chroot;capability.location.android-api;capability.location.gpsd' 'capability.location.linux;capability.location.gpsd' backend_location_android_gpsd_probe backend_location_android_gpsd_start backend_location_android_gpsd_stop backend_location_android_gpsd_status ANDROID_GENERIC NO

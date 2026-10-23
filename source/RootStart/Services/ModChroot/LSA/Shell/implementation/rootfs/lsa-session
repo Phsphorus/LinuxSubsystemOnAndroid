@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+# `su` sanitizes the desktop process environment when the root-owned session
+# hands off to myuser.  Reload the rootfs-owned policy after that handoff so a
+# launcher on VNC can still open an app on DISPLAY=:0 through GPUBridge.
+[ -r /usr/local/lib/lsa/gpu/lsa-gpu-env.sh ] && . /usr/local/lib/lsa/gpu/lsa-gpu-env.sh
+
+# The configured desktop starts from ModChroot as root.  Linux applications and
+# their session must run as the normal Debian account.
+if [ "$(id -u)" -eq 0 ]; then
+  user_home="$(awk -F: '$1 == "myuser" { print $6; exit }' /etc/passwd)"
+  [ -n "$user_home" ] || user_home="/home/myuser"
+  user_xauthority="$user_home/.Xauthority"
+  root_xauthority="${XAUTHORITY:-/root/.Xauthority}"
+
+  # TigerVNC creates its server cookie for root before it runs xstartup.  The
+  # shell must run as myuser, so copy only this display's cookie into the
+  # normal user's private authority file before switching accounts.  Termux:X11
+  # may intentionally have no cookie; that is a valid no-auth display and
+  # must not prevent the handoff.
+  if command -v xauth >/dev/null 2>&1 && [ -r "$root_xauthority" ] && [ -n "${DISPLAY:-}" ]; then
+    install -d -m 700 -o myuser -g "$(id -g myuser)" "$user_home"
+    authority_entries="$(mktemp)"
+    if xauth -f "$root_xauthority" nlist "$DISPLAY" >"$authority_entries" 2>/dev/null && [ -s "$authority_entries" ]; then
+      rm -f "$user_xauthority"
+      /usr/bin/su -s /bin/sh myuser -c "xauth -f '$user_xauthority' nmerge -" <"$authority_entries"
+      chown myuser:"$(id -g myuser)" "$user_xauthority"
+      chmod 600 "$user_xauthority"
+    else
+      rm -f "$user_xauthority"
+    fi
+    rm -f "$authority_entries"
+  fi
+
+  # LXTerminal honors SHELL from its session environment.  Running this
+  # handoff through sh made every launcher terminal a bare POSIX shell, with
+  # no history, arrows, or Tab completion despite myuser's Bash login shell.
+  exec /usr/bin/su -s /bin/bash myuser -c "HOME='$user_home' DISPLAY=$DISPLAY XAUTHORITY=$user_xauthority SHELL=/bin/bash exec /usr/local/bin/lsa-session"
+fi
+
+export DISPLAY
+export XDG_RUNTIME_DIR="/tmp/lsa-runtime-$(id -u)"
+mkdir -p "$XDG_RUNTIME_DIR"
+chmod 700 "$XDG_RUNTIME_DIR"
+
+shell_root="/usr/local/lib/lsa/shell"
+openbox --replace --config-file "$shell_root/openbox-rc.xml" &
+openbox_pid=$!
+cleanup() {
+  kill "$openbox_pid" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
+
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  xprop -root _NET_SUPPORTING_WM_CHECK >/dev/null 2>&1 && break
+  sleep 0.1
+done
+
+exec /usr/bin/python3 "$shell_root/lsa-shell.py"

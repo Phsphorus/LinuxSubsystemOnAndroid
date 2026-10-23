@@ -1,0 +1,69 @@
+#!/usr/bin/env python3
+"""
+HALAudio CLI
+Talks to HALAudio.py via /tmp/halaudio.sock.
+
+Usage:
+  HALAudio             -> status
+  HALAudio status      -> status
+  HALAudio up          -> tighter latency
+  HALAudio down        -> looser latency
+  HALAudio stop        -> kill HALAudio.py
+"""
+
+import socket
+import sys
+import subprocess
+
+CTRL_SOCK_PATH = "/tmp/halaudio.sock"
+
+
+def kill_halaudio():
+    # Find PIDs
+    try:
+        out = subprocess.check_output(
+            ["pgrep", "-f", "HALAudio.py"],
+            text=True
+        ).strip().splitlines()
+    except subprocess.CalledProcessError:
+        print("No HALAudio.py running")
+        return
+
+    # Kill them
+    for pid in out:
+        try:
+            subprocess.run(["kill", "-9", pid])
+            print(f"Killed HALAudio.py PID {pid}")
+        except Exception:
+            pass
+
+
+def send_cmd(cmd):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        try:
+            s.connect(CTRL_SOCK_PATH)
+        except OSError as e:
+            print(f"ERR connect {e}")
+            return 1
+        s.sendall((cmd + "\n").encode("utf8"))
+        data = s.recv(1024)
+        if data:
+            print(data.decode("utf8", "ignore"), end="")
+    return 0
+
+
+def main():
+    if len(sys.argv) < 2:
+        cmd = "STATUS"
+    else:
+        cmd = sys.argv[1].lower()
+
+    if cmd == "stop":
+        kill_halaudio()
+        return 0
+
+    return send_cmd(cmd.upper())
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,31 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+provider_android_audio_fallback_status() {
+    if lsa_compat_pid_file_running "$LSA_NONROOT_BASE/Providers/Android/Audio/run/provider.pid"; then printf RUNNING; else printf STOPPED; fi
+}
+
+provider_android_opensles_probe() {
+    lsa_architecture_android_system_library libOpenSLES.so >/dev/null 2>&1 || { printf 'Android OpenSL ES library is missing'; return 3; }
+    [ -x "$LSA_TERMUX_PREFIX/bin/pulseaudio" ] && [ -x "$LSA_TERMUX_PREFIX/bin/pacat" ] && [ -x "$LSA_TERMUX_PREFIX/bin/pactl" ] || { printf 'Termux PulseAudio/OpenSL bridge tools are missing'; return 3; }
+    printf 'Termux PulseAudio OpenSL ES sink bridge is installed'
+}
+
+provider_android_sox_probe() {
+    [ -x "$LSA_TERMUX_PREFIX/bin/play" ] || { printf 'Termux SoX play command is missing'; return 3; }
+    printf 'Termux SoX raw PCM playback bridge is installed'
+}
+
+provider_android_pulse_proxy_probe() {
+    [ -x "$LSA_TERMUX_PREFIX/bin/pulseaudio" ] && [ -x "$LSA_TERMUX_PREFIX/bin/pacat" ] && [ -x "$LSA_TERMUX_PREFIX/bin/pactl" ] || { printf 'Termux PulseAudio proxy tools are missing'; return 3; }
+    printf 'Termux PulseAudio proxy bridge is installed'
+}
+
+provider_android_termux_api_audio_probe() {
+    [ -x "$LSA_TERMUX_PREFIX/bin/termux-media-player" ] || { printf 'Termux:API media player command is missing'; return 3; }
+    printf 'Termux:API buffered media playback fallback is installed'
+}
+
+lsa_provider_register android.opensles ANDROID_GENERIC 88500 'capability.android.termux' 'capability.audio.opensles' provider_android_opensles_probe provider_android_audio_fallback_status
+lsa_provider_register android.sox ANDROID_GENERIC 88000 'capability.android.termux' 'capability.audio.sox' provider_android_sox_probe provider_android_audio_fallback_status
+lsa_provider_register android.pulse-proxy ANDROID_GENERIC 87500 'capability.android.termux' 'capability.audio.pulse-proxy' provider_android_pulse_proxy_probe provider_android_audio_fallback_status
+lsa_provider_register android.termux-api-audio ANDROID_GENERIC 100 'capability.android.termux' 'capability.audio.termux-api' provider_android_termux_api_audio_probe provider_android_audio_fallback_status

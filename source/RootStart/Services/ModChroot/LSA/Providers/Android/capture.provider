@@ -1,0 +1,25 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+LSA_ANDROID_CAPTURE_BASE="${LSA_ANDROID_CAPTURE_BASE:-$LSA_NONROOT_BASE/Providers/Android/Capture}"
+LSA_ANDROID_CAPTURE_CONTROL="$LSA_ANDROID_CAPTURE_BASE/control.py"
+
+provider_android_capture_probe() {
+    [ -x "$LSA_ANDROID_CAPTURE_BASE/lifecycle.sh" ] || { printf 'Termux-user Android capture lifecycle is missing'; return 3; }
+    [ -f "$LSA_ANDROID_CAPTURE_CONTROL" ] || { printf 'Android capture control client is missing'; return 3; }
+    [ -x "$LSA_TERMUX_PREFIX/bin/termux-camera-photo" ] || { printf 'Termux camera API command is missing'; return 3; }
+    [ -x "$LSA_TERMUX_PREFIX/bin/termux-location" ] || { printf 'Termux location API command is missing'; return 3; }
+    printf 'Termux-user Android camera and location provider is installed'
+}
+
+provider_android_capture_status() {
+    local timeout_cmd="${LSA_TERMUX_PREFIX:-/data/data/com.termux/files/usr}/bin/timeout"
+    if [ -x "$timeout_cmd" ] && "$timeout_cmd" 5 "$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" status >/dev/null 2>&1; then
+        printf RUNNING
+    elif [ ! -x "$timeout_cmd" ] && "$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" status >/dev/null 2>&1; then
+        printf RUNNING
+    else
+        printf STOPPED
+    fi
+}
+
+lsa_provider_register android.capture ANDROID_GENERIC 88500 'capability.android.termux' 'capability.camera.android-api;capability.camera.http-mjpeg;capability.location.android-api;capability.location.gpsd' provider_android_capture_probe provider_android_capture_status

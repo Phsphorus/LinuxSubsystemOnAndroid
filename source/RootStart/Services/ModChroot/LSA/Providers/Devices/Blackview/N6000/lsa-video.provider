@@ -1,0 +1,41 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+LSA_N6000_VIDEO_PROVIDER="${LSA_N6000_VIDEO_PROVIDER:-$LSA_NONROOT_BASE/Providers/Devices/Blackview/N6000/VideoEncode}"
+LSA_N6000_VIDEO_RUN="$LSA_N6000_VIDEO_PROVIDER/state/run"
+LSA_N6000_GPU_RUN="$LSA_NONROOT_BASE/Providers/Android/GPUBridge/run"
+LSA_N6000_VIDEO_CONSUMER="$LSA_FRAMEWORK_BASE/../Modules/VideoEncode/implementation/rootfs/lsa_ahb_encode"
+
+provider_n6000_lsa_video_architecture() {
+    # Registration records an unavailable or mismatched optional artifact as
+    # UNSUPPORTED. That is expected on every non-arm64 rootfs and must not make
+    # the framework's architecture phase itself fail.
+    lsa_architecture_register_binary n6000.lsa_ahb_encode "$LSA_N6000_VIDEO_CONSUMER" "$LSA_ARCH_ROOTFS" || true
+}
+
+provider_n6000_lsa_video_probe() {
+    [ "$(getprop ro.product.manufacturer 2>/dev/null)" = Blackview ] || { printf 'device manufacturer does not match Blackview'; return 3; }
+    [ "$(getprop ro.product.model 2>/dev/null)" = N6000 ] || { printf 'device model does not match N6000'; return 3; }
+    [ "$LSA_ARCH_ANDROID_ABI" = arm64 ] || { printf 'proven N6000 GPU-tap implementation requires arm64 Android ABI'; return 3; }
+    [ -x "$LSA_N6000_VIDEO_PROVIDER/lifecycle.sh" ] || { printf 'N6000 Termux video provider lifecycle missing'; return 3; }
+    [ -f "$LSA_N6000_VIDEO_PROVIDER/implementation/gpu_tap.c" ] || { printf 'N6000 GPU tap source missing'; return 3; }
+    [ -x "$LSA_N6000_VIDEO_PROVIDER/implementation/virgl-with-video.sh" ] || { printf 'N6000 video-mode launcher missing'; return 3; }
+    [ -f "$LSA_N6000_VIDEO_PROVIDER/control.py" ] || { printf 'N6000 video provider control client missing'; return 3; }
+    [ -c /dev/video2 ] && [ -c /dev/dma_heap/mtk_mm ] || { printf 'matched device lacks required MediaTek nodes'; return 3; }
+    [ "$LSA_ARCH_ROOTFS" != unknown ] || { printf 'Linux rootfs architecture could not be detected'; return 3; }
+    if [ "${LSA_BINARY_ARCH_RESULT[n6000.lsa_ahb_encode]:-UNSUPPORTED}" != AVAILABLE ]; then
+        printf 'N6000 H.264 consumer architecture is unavailable or incompatible with Linux rootfs'
+        return 3
+    fi
+    printf 'N6000 H.264 GPU-tap provider and validated MediaTek prerequisites are present'
+}
+
+provider_n6000_lsa_video_status() {
+    if [ -S "$LSA_N6000_GPU_RUN/.lsa-video" ] && [ "$(cat "$LSA_N6000_GPU_RUN/mode" 2>/dev/null)" = video ]; then
+        printf RUNNING
+    else
+        printf STOPPED
+    fi
+}
+
+lsa_provider_register device.blackview.n6000.lsa-video DEVICE_SPECIFIC 100000 'capability.vendor.mediatek.venc;capability.vendor.mediatek.dma-heap' 'capability.gpu.encode.h264;capability.gpu.video-tap;capability.gpu.device-optimized' provider_n6000_lsa_video_probe provider_n6000_lsa_video_status
+lsa_architecture_register_hook provider_n6000_lsa_video_architecture

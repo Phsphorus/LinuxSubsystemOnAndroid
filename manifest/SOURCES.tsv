@@ -1,0 +1,4 @@
+component	distributed_artifact	license	license_text	source_location	source_revision_or_version	source_availability	correspondence_status
+LSA	payload/RootStart.tar;payload/NonRootStart.tar;deploy.sh	Apache-2.0	LICENSES/Apache-2.0.txt	LSALIVE/source;LSALIVE/deploy;LSALIVE/tools	LSADeploy release version	Payload contains executable source; canonical tree is the build source	SOURCE_SHIPPED_AS_TEXT
+Termux:API	apps/termux-api.apk	GPL-3.0-only	LICENSES/GPL-3.0.txt	https://github.com/termux/termux-api/tree/v0.53.0	v0.53.0;6c8eaa223bcc387e6b28146d340acb20712aa3e7	Public immutable upstream source tag	UPSTREAM_SOURCE_IDENTIFIED
+LSA-X11	apps/lsa-x11.apk	GPL-3.0-only	LICENSES/GPL-3.0.txt	https://github.com/Phsphorus/lsa-x11;release sources/ archive	1.03.01-0fff278-07.09.26	Same-release source archive path and SHA-256 are appended by the builder; build attestation is manifest/LSA-X11-BUILD.tsv	REBUILT_FROM_RECORDED_WORKSPACE

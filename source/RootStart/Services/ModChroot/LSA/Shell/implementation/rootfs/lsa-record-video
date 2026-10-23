@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+# This intentionally remains a foreground command in lxterminal.  The user can
+# see the output filename and stop the active recording with Ctrl+C.
+recordings="${LSA_RECORDINGS_DIR:-$HOME/Videos}"
+mkdir -p "$recordings"
+output="$recordings/LSA-$(date +%Y-%m-%d_%H-%M-%S).mp4"
+
+printf 'Recording the Android camera to %s\nPress Ctrl+C to stop.\n' "$output"
+exec /usr/local/bin/camera-record "$output"

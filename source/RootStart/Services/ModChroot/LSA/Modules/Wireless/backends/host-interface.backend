@@ -1,0 +1,20 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+WIRELESS_HOST_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$WIRELESS_HOST_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_wireless_host_interface_probe() {
+    local interface
+    interface="$(wireless_primary_interface)"
+    [ -n "$interface" ] || { printf 'no safe host wireless interface was discovered'; return 3; }
+    wireless_rootfs_interface_visible "$interface" || { printf 'Linux rootfs does not expose host interface %s' "$interface"; return 3; }
+    printf 'host interface %s is available through Linux standard network namespaces' "$interface"
+}
+
+backend_wireless_host_interface_start() { wireless_start_host_interface; }
+backend_wireless_host_interface_stop() { wireless_stop_owned host-interface; }
+backend_wireless_host_interface_status() { wireless_status_owned host-interface; }
+backend_wireless_host_interface_health() { wireless_health_host_interface; }
+
+lsa_backend_register wireless.host-interface Wireless A 90000 'capability.linux.chroot;capability.wireless.host-interface' 'capability.wireless.linux.interface;capability.wireless.linux.metrics;capability.wireless.linux.sockets' backend_wireless_host_interface_probe backend_wireless_host_interface_start backend_wireless_host_interface_stop backend_wireless_host_interface_status ANDROID_GENERIC NO backend_wireless_host_interface_health

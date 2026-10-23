@@ -1,0 +1,3 @@
+file	package	version_code	version_name	sha256
+termux-api.apk	com.termux.api	1002	0.53.0	ecf916ff80ae751e65c092f51c055cce4de417ebeea8e449cd0f294afdbde39a
+lsa-x11.apk	com.phsphorus.lsa.x11	15	1.03.01-0fff278-07.09.26	b9106413f62850901c2d62a2ec5a79c7b98b336bbd3a05879c35dc89cb3cde66

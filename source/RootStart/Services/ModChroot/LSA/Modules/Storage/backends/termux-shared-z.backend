@@ -1,0 +1,35 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+STORAGE_Z_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$STORAGE_Z_MODULE_BASE/implementation/android-shared.sh"
+
+backend_storage_termux_shared_z_probe() {
+    [ -d "$LSA_TERMUX_HOME/storage/shared" ] || { printf 'Termux shared-storage link is unavailable; run termux-setup-storage'; return 3; }
+    printf 'Termux shared-storage link can provide the compatibility baseline'
+}
+
+backend_storage_termux_shared_z_start() {
+    lsa_storage_termux_shared_start || { printf 'Termux shared-storage bind mount failed'; return 1; }
+    lsa_storage_external_start || { printf 'Android removable-storage watcher failed'; return 1; }
+    printf 'Termux shared-storage compatibility mount and removable-volume ownership watcher active'
+}
+
+backend_storage_termux_shared_z_stop() {
+    lsa_storage_external_stop || { printf 'Android removable-storage watcher stop failed'; return 1; }
+    lsa_storage_unmount || { printf 'Termux shared-storage compatibility unmount failed'; return 1; }
+    printf 'Termux shared-storage compatibility mount and removable exports stopped'
+}
+
+backend_storage_termux_shared_z_status() {
+    if lsa_compat_mount_present "$LSA_STORAGE_TARGET" && lsa_storage_external_watcher_running; then printf RUNNING; else printf STOPPED; fi
+}
+
+backend_storage_termux_shared_z_health() {
+    lsa_compat_mount_present "$LSA_STORAGE_TARGET" || { printf 'Termux shared-storage bind is absent'; return 1; }
+    lsa_storage_external_watcher_running || { printf 'removable-storage ownership watcher is not running'; return 1; }
+    [ -r "$LSA_STORAGE_STATE_FILE" ] || { printf 'removable-storage state file is absent'; return 1; }
+    printf 'Termux shared storage and removable-volume ownership watcher are active'
+}
+
+lsa_backend_register storage.termux-shared Storage Z 0 'capability.linux.chroot;capability.mount;capability.android.termux' 'capability.storage.shared' backend_storage_termux_shared_z_probe backend_storage_termux_shared_z_start backend_storage_termux_shared_z_stop backend_storage_termux_shared_z_status GENERIC NO backend_storage_termux_shared_z_health

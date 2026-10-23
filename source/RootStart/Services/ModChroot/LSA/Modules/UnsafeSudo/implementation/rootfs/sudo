@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Generic sudo cannot be safely isolated on this Android-backed rootfs.  This
+# wrapper requires an explicit interactive acknowledgement before it asks the
+# RootStart-owned daemon to run the real setuid sudo in a disposable namespace.
+
+set -u
+
+RUN_CLIENT=/usr/local/lib/lsa/unsafe-sudo/lsudo-run.py
+LEASE_SOCKET=/run/lsa/unsafe-sudo.sock
+ACKNOWLEDGEMENT='I WILL NOT BE STOPPED'
+
+printf '%s\n' 'sudo: BE WARNED DRAGONS HERE!! This device does not support true sudo isolation and is a BIG security risk. To give an application root usage go through an LSA provider OR accept the risk and type "I WILL NOT BE STOPPED"' >&2
+
+if [ ! -t 0 ]; then
+  printf '%s\n' 'sudo: unsafe sudo must be acknowledged from an interactive terminal.' >&2
+  exit 1
+fi
+
+printf '%s' 'Type "I WILL NOT BE STOPPED" to unlock sudo for this command: ' >&2
+IFS= read -r confirmation || {
+  printf '%s\n' 'sudo: acknowledgement was not received; rootfs remains locked.' >&2
+  exit 1
+}
+
+if [ "$confirmation" != "$ACKNOWLEDGEMENT" ]; then
+  printf '%s\n' 'sudo: acknowledgement did not match; rootfs remains locked.' >&2
+  exit 1
+fi
+
+if [ ! -x "$RUN_CLIENT" ] || [ ! -S "$LEASE_SOCKET" ]; then
+  printf '%s\n' 'sudo: unsafe sudo compatibility service is unavailable; rootfs remains locked.' >&2
+  exit 1
+fi
+
+exec /usr/bin/python3 "$RUN_CLIENT" --socket "$LEASE_SOCKET" -- "$@"

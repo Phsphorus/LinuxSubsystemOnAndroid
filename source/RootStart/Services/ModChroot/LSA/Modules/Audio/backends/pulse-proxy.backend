@@ -1,0 +1,11 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+backend_audio_pulse_proxy_probe() {
+    [ -x "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" ] || { printf 'Audio module lifecycle missing'; return 3; }
+    printf 'Linux Pulse/ALSA can stream through the Termux PulseAudio proxy'
+}
+backend_audio_pulse_proxy_start() { LSA_AUDIO_BACKEND=pulse-proxy "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" start; }
+backend_audio_pulse_proxy_stop() { "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" stop; }
+backend_audio_pulse_proxy_status() { [ -S "$LSA_CHROOT_DIR/tmp/pa-run/pulse/native" ] && printf RUNNING || printf STOPPED; }
+
+lsa_backend_register audio.pulse-proxy Audio D 60000 'capability.linux.chroot;capability.audio.pulse-proxy' 'capability.audio.linux;capability.audio.alsa-pulse' backend_audio_pulse_proxy_probe backend_audio_pulse_proxy_start backend_audio_pulse_proxy_stop backend_audio_pulse_proxy_status ANDROID_GENERIC NO

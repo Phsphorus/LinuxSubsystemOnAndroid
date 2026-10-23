@@ -1,0 +1,21 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+backend_audio_aaudio_halaudio_probe() {
+    [ -x "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" ] || { printf 'Audio module lifecycle missing'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/rootfs/halbridge/HALAudio.py" ] || { printf 'module-owned Linux HALAudio source missing'; return 3; }
+    printf 'module-owned AAudio to Linux Pulse/ALSA implementation is installed'
+}
+
+backend_audio_aaudio_halaudio_start() {
+    "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" start
+}
+
+backend_audio_aaudio_halaudio_stop() {
+    "$LSA_FRAMEWORK_BASE/../Modules/Audio/implementation/lifecycle.sh" stop
+}
+
+backend_audio_aaudio_halaudio_status() {
+    if [ -S "$LSA_CHROOT_DIR/tmp/pa-run/pulse/native" ]; then printf RUNNING; else printf STOPPED; fi
+}
+
+lsa_backend_register audio.aaudio-halaudio Audio A 90000 'capability.linux.chroot;capability.audio.aaudio;capability.audio.pulse' 'capability.audio.linux;capability.audio.alsa-pulse;capability.audio.spec-negotiated' backend_audio_aaudio_halaudio_probe backend_audio_aaudio_halaudio_start backend_audio_aaudio_halaudio_stop backend_audio_aaudio_halaudio_status ANDROID_GENERIC NO

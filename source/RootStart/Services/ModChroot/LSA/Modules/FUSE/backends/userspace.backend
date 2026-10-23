@@ -1,0 +1,12 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+FUSE_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$FUSE_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_fuse_userspace_probe() {
+    [ -e /dev/fuse ] || { printf '/dev/fuse is unavailable'; return 3; }
+    printf 'userspace FUSE support is available to Linux modules'
+}
+
+lsa_backend_register fuse.userspace FUSE D 6000 'capability.linux.chroot;capability.fuse.mount' 'capability.linux.fuse' backend_fuse_userspace_probe backend_fuse_userspace_start backend_fuse_userspace_stop backend_fuse_userspace_status GENERIC NO

@@ -1,0 +1,12 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+DBUS_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$DBUS_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_dbus_system_probe() {
+    [ -x "$DBUS_CHROOT_DIR/usr/bin/dbus-daemon" ] || { printf 'Debian dbus-daemon is not installed'; return 3; }
+    printf 'system D-Bus implementation is installed in the chroot'
+}
+
+lsa_backend_register dbus.system D-Bus C 81000 'capability.linux.chroot' 'capability.dbus.system' backend_dbus_system_probe backend_dbus_system_start backend_dbus_system_stop backend_dbus_system_status GENERIC NO

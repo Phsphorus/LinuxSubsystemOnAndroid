@@ -1,0 +1,13 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+VIDEO_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$VIDEO_MODULE_BASE/implementation/lifecycle.sh"
+
+backend_video_encode_lsa_probe() {
+    [ -x "$VIDEO_MODULE_BASE/implementation/rootfs/lsa_ahb_encode" ] || { printf 'verified module-owned H.264 consumer asset is missing'; return 3; }
+    [ -f "$LSA_N6000_VIDEO_PROVIDER/control.py" ] || { printf 'N6000 Termux video provider control client is missing'; return 3; }
+    printf 'generic Linux H.264 consumer can activate a supplied video-tap capability'
+}
+
+lsa_backend_register video.encode.lsa VideoEncode A 100000 'capability.linux.chroot;capability.gpu.encode.h264;capability.gpu.video-tap' 'capability.linux.gpu.encode.h264' backend_video_encode_lsa_probe backend_video_encode_lsa_start backend_video_encode_lsa_stop backend_video_encode_lsa_status GENERIC YES

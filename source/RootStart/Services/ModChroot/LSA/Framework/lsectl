@@ -1,0 +1,162 @@
+#!/data/data/com.termux/files/usr/bin/bash
+set -u
+
+BASE="$(CDPATH= cd -- "$(dirname "$0")" && pwd)"
+# shellcheck source=/dev/null
+source "$BASE/core.sh"
+LSA_CONTAINMENT_LIBRARY=1
+# shellcheck source=/dev/null
+source "$BASE/containment.sh"
+unset LSA_CONTAINMENT_LIBRARY
+
+command="${1:-report}"
+
+apply_backend_override() {
+    local action="$1" backend_id="$2" reason="${3:-}"
+    local module previous previous_runtime replacement
+
+    lsa_framework_refresh "manual-$action-before" || return 1
+    lsa_backend_rejection_validate_id "$backend_id" || return $?
+    module="${LSA_BACKEND_MODULE[$backend_id]}"
+    previous="${LSA_SELECTED_BACKEND[$module]:-}"
+    previous_runtime="$LSA_RUNTIME_STOPPED"
+    [ -n "$previous" ] && previous_runtime="${LSA_BACKEND_RUNTIME[$previous]:-$LSA_RUNTIME_STOPPED}"
+
+    if [ "$action" = reject ]; then
+        lsa_backend_reject "$backend_id" "$reason" || return $?
+    else
+        lsa_backend_accept "$backend_id" || return $?
+    fi
+
+    # Only transition a module that was actually active.  Rejecting or
+    # accepting an optional stopped backend changes durable policy without
+    # unexpectedly starting hardware work.
+    if [ -n "$previous" ] && [ "$previous_runtime" = "$LSA_RUNTIME_RUNNING" ]; then
+        lsa_framework_lifecycle_module stop "$module" || return 1
+    fi
+
+    lsa_framework_refresh "manual-$action" || return 1
+    replacement="${LSA_SELECTED_BACKEND[$module]:-}"
+    if [ "$previous_runtime" = "$LSA_RUNTIME_RUNNING" ] && [ -n "$replacement" ]; then
+        lsa_framework_lifecycle_module start "$module" || return 1
+        lsa_framework_refresh_runtime
+        lsa_framework_write_state "manual-$action"
+    fi
+}
+
+case "$command" in
+    refresh|probe)
+        lsa_framework_refresh "${2:-manual}"
+        ;;
+    report)
+        report_phase=manual
+        report_verbose=""
+        shift
+        for report_argument in "$@"; do
+            case "$report_argument" in
+                --verbose)
+                    report_verbose=--verbose
+                    ;;
+                *)
+                    report_phase="$report_argument"
+                    ;;
+            esac
+        done
+        lsa_framework_refresh "$report_phase"
+        lsa_framework_report "$report_verbose"
+        ;;
+    start|stop)
+        lsa_framework_refresh "manual-$command"
+        if [ -n "${2:-}" ]; then
+            lsa_framework_lifecycle_module "$command" "$2"
+        else
+            lsa_framework_lifecycle "$command"
+        fi
+        lsa_framework_refresh_runtime
+        lsa_framework_write_state "manual-$command"
+        ;;
+    health)
+        lsa_framework_refresh "manual-health"
+        if [ -n "${2:-}" ]; then
+            printf 'module\tresult\tdetail\n'
+            lsa_framework_health_module "$2"
+        else
+            lsa_framework_health
+        fi
+        ;;
+    reject|disable)
+        [ -n "${2:-}" ] || { printf 'usage: %s reject <backend-id> [reason]\n' "$0" >&2; exit 2; }
+        apply_backend_override reject "$2" "${3:-disabled by user}"
+        ;;
+    accept|enable)
+        [ -n "${2:-}" ] || { printf 'usage: %s accept <backend-id>\n' "$0" >&2; exit 2; }
+        apply_backend_override accept "$2"
+        ;;
+    rejections)
+        lsa_framework_load
+        lsa_backend_list_rejections
+        ;;
+    wireless)
+        wireless_action="${2:-status}"
+        lsa_framework_load
+        case "$wireless_action" in
+            qualify)
+                wireless_mode=aggressive
+                [ "${3:-}" = --safe ] && wireless_mode=safe
+                [ -z "${3:-}" ] || [ "${3:-}" = --safe ] || {
+                    printf 'usage: %s wireless qualify [--safe]\n' "$0" >&2
+                    exit 2
+                }
+                wireless_qualify "$wireless_mode"
+                wireless_refresh_inventory
+                wireless_platform_report
+                ;;
+            qualification)
+                case "${3:-status}" in
+                    enable)
+                        wireless_set_qualification_enabled 1
+                        printf 'wireless aggressive first-run qualification enabled\n'
+                        ;;
+                    disable)
+                        wireless_set_qualification_enabled 0
+                        printf 'wireless aggressive first-run qualification disabled\n'
+                        ;;
+                    status)
+                        if wireless_qualification_enabled; then
+                            printf 'aggressive_first_run=enabled\n'
+                        else
+                            printf 'aggressive_first_run=disabled\n'
+                        fi
+                        if wireless_qualification_current; then
+                            printf 'qualification_cache=current\n'
+                        else
+                            printf 'qualification_cache=missing_or_stale\n'
+                        fi
+                        ;;
+                    *)
+                        printf 'usage: %s wireless qualification {status|enable|disable}\n' "$0" >&2
+                        exit 2
+                        ;;
+                esac
+                ;;
+            status)
+                wireless_refresh_inventory
+                wireless_platform_report
+                ;;
+            *)
+                printf 'usage: %s wireless {status|qualify [--safe]|qualification {status|enable|disable}}\n' "$0" >&2
+                exit 2
+                ;;
+        esac
+        ;;
+    paths)
+        printf '%s\n' "$LSA_RUNTIME_DIR"
+        ;;
+    containment)
+        lsa_containment_qualify "${2:-}" "${3:-}"
+        ;;
+    *)
+        printf 'usage: %s {refresh|probe|report [phase] [--verbose]|start [Module]|stop [Module]|health [Module]|reject <backend-id> [reason]|accept <backend-id>|rejections|wireless {status|qualify [--safe]|qualification {status|enable|disable}}|containment [candidate-pid]|paths}\n' "$0" >&2
+        exit 2
+        ;;
+esac

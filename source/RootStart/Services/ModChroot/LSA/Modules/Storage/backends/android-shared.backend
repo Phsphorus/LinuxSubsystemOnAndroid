@@ -1,0 +1,36 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+STORAGE_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+source "$STORAGE_MODULE_BASE/implementation/android-shared.sh"
+
+backend_storage_android_shared_probe() {
+    [ -d /sdcard ] || { printf 'Android shared storage root is absent'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Modules/Storage/implementation/android-shared.sh" ] || { printf 'Android shared storage implementation is missing'; return 3; }
+    printf 'module-owned Android shared storage and vold ownership handoff are installed'
+}
+
+backend_storage_android_shared_start() {
+    lsa_storage_android_shared_start || { printf 'Android shared storage mount failed'; return 1; }
+    lsa_storage_external_start || { printf 'Android removable-storage watcher failed'; return 1; }
+    printf 'Android shared storage mounted; removable volumes follow vold ownership'
+}
+
+backend_storage_android_shared_stop() {
+    lsa_storage_external_stop || { printf 'Android removable-storage watcher stop failed'; return 1; }
+    lsa_storage_unmount || { printf 'Android shared storage unmount failed'; return 1; }
+    printf 'Android shared storage and removable exports unmounted'
+}
+
+backend_storage_android_shared_status() {
+    if lsa_compat_mount_present "$LSA_CHROOT_DIR/mnt/sdcard" && lsa_storage_external_watcher_running; then printf RUNNING; else printf STOPPED; fi
+}
+
+backend_storage_android_shared_health() {
+    lsa_compat_mount_present "$LSA_CHROOT_DIR/mnt/sdcard" || { printf 'Android shared-storage bind is absent'; return 1; }
+    lsa_storage_external_watcher_running || { printf 'removable-storage ownership watcher is not running'; return 1; }
+    [ -r "$LSA_STORAGE_STATE_FILE" ] || { printf 'removable-storage state file is absent'; return 1; }
+    printf 'Android shared storage and removable-volume ownership watcher are active'
+}
+
+lsa_backend_register storage.android-shared Storage A 88000 'capability.linux.chroot;capability.mount' 'capability.storage.shared' backend_storage_android_shared_probe backend_storage_android_shared_start backend_storage_android_shared_stop backend_storage_android_shared_status ANDROID_GENERIC NO backend_storage_android_shared_health

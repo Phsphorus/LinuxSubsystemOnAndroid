@@ -1,0 +1,13 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+provider_mediatek_venc_probe() {
+    [ -c /dev/video2 ] || { printf 'MediaTek V4L2 encoder node /dev/video2 is absent'; return 3; }
+    [ -c /dev/dma_heap/mtk_mm ] || { printf 'MediaTek DMA heap /dev/dma_heap/mtk_mm is absent'; return 3; }
+    printf 'MediaTek V4L2 encoder node and multimedia DMA heap are present'
+}
+
+provider_mediatek_venc_status() {
+    if [ -c /dev/video2 ] && [ -c /dev/dma_heap/mtk_mm ]; then printf STOPPED; else printf FAILED; fi
+}
+
+lsa_provider_register vendor.mediatek.venc VENDOR_SPECIFIC 90000 'capability.host.root' 'capability.vendor.mediatek.venc;capability.vendor.mediatek.dma-heap' provider_mediatek_venc_probe provider_mediatek_venc_status

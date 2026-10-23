@@ -1,0 +1,2 @@
+apk_file	apk_sha256	workspace_revision	workspace_state	build_task	built_utc	correspondence_status
+lsa-x11.apk	b9106413f62850901c2d62a2ec5a79c7b98b336bbd3a05879c35dc89cb3cde66	0fff2784342317079ef522be3301035551ab5e62	DIRTY_WORKSPACE	:lorie-app:assembleStandaloneDebug	2026-09-07T11:15:09Z	REBUILT_FROM_RECORDED_WORKSPACE

@@ -1,0 +1,15 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+CAMERA_MODULE_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+backend_camera_v4l2_mjpeg_probe() {
+    [ -x "$CAMERA_MODULE_BASE/implementation/lifecycle.sh" ] || { printf 'camera V4L2 lifecycle missing'; return 3; }
+    [ -f "$CAMERA_MODULE_BASE/implementation/rootfs/lsa-camera/liblsa_camera_v4l2.c" ] || { printf 'camera V4L2 source missing'; return 3; }
+    [ -x "${CHROOT_DIR:-/data/local/linux}/usr/bin/gcc" ] || { printf 'rootfs gcc is required for the camera V4L2 compatibility layer'; return 3; }
+    printf 'Android MJPEG camera can be exposed as a Linux V4L2 read device'
+}
+backend_camera_v4l2_mjpeg_start() { "$CAMERA_MODULE_BASE/implementation/lifecycle.sh" start; }
+backend_camera_v4l2_mjpeg_stop() { "$CAMERA_MODULE_BASE/implementation/lifecycle.sh" stop; }
+backend_camera_v4l2_mjpeg_status() { "$CAMERA_MODULE_BASE/implementation/lifecycle.sh" status; }
+
+lsa_backend_register camera.v4l2-mjpeg Camera B 95000 'capability.linux.chroot;capability.camera.android-api;capability.camera.http-mjpeg' 'capability.camera.linux;capability.camera.v4l2;capability.camera.mjpeg;capability.camera.snapshot;capability.camera.recording' backend_camera_v4l2_mjpeg_probe backend_camera_v4l2_mjpeg_start backend_camera_v4l2_mjpeg_stop backend_camera_v4l2_mjpeg_status ANDROID_GENERIC NO

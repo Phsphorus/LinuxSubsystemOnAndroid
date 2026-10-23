@@ -1,0 +1,23 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+backend_core_chroot_probe() {
+    command -v chroot >/dev/null 2>&1 || { printf 'chroot command unavailable'; return 3; }
+    [ -x "$LSA_CHROOT_DIR/bin/sh" ] || { printf 'bootable rootfs shell missing'; return 3; }
+    [ -f "$LSA_FRAMEWORK_BASE/../Modules/CoreChroot/implementation/mounts.sh" ] || { printf 'CoreChroot implementation is missing'; return 3; }
+    printf 'module-owned CoreChroot bootstrap is usable'
+}
+
+backend_core_chroot_start() {
+    lsa_compat_mount_present "$LSA_CHROOT_DIR/proc" || { printf 'CoreChroot bootstrap is not mounted'; return 1; }
+    printf 'CoreChroot bootstrap already active'
+}
+
+backend_core_chroot_stop() {
+    printf 'CoreChroot reverse mount lifecycle runs during root-session teardown'
+}
+
+backend_core_chroot_status() {
+    if lsa_compat_mount_present "$LSA_CHROOT_DIR/proc"; then printf RUNNING; else printf STOPPED; fi
+}
+
+lsa_backend_register core.chroot CoreChroot A 90000 'capability.host.root;capability.chroot.rootfs;capability.mount' 'capability.linux.chroot' backend_core_chroot_probe backend_core_chroot_start backend_core_chroot_stop backend_core_chroot_status ANDROID_GENERIC NO

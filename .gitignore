@@ -1,0 +1,24 @@
+# Local build output and runtime evidence
+/tmp/
+/LSADeploy/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pid
+*.sock
+*.secret
+*.log
+.runtime/
+.pids/
+logs/
+run/
+runtime/
+
+# Android/Gradle local configuration
+local.properties
+.gradle/
+
+# Local operator configuration
+.env
+*.pem
+*.key

@@ -1,0 +1,189 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+WIRELESS_PROVIDER_BASE="$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WIRELESS_INVENTORY="$WIRELESS_PROVIDER_BASE/implementation/wireless_inventory.py"
+WIRELESS_QUALIFICATION="$WIRELESS_PROVIDER_BASE/implementation/wireless_qualification.py"
+WIRELESS_STATE="$LSA_RUNTIME_DIR/wireless.tsv"
+WIRELESS_ROOTSTART_DIR="${LSA_ROOTSTART_DIR:-$(CDPATH= cd -- "$LSA_START_BASE/../.." && pwd)}"
+WIRELESS_TOOL_DIR="$WIRELESS_ROOTSTART_DIR/Tools/iw"
+WIRELESS_IW="$WIRELESS_TOOL_DIR/iw"
+WIRELESS_IW_LIB="$WIRELESS_TOOL_DIR/lib"
+WIRELESS_NL80211="$WIRELESS_TOOL_DIR/lsa-nl80211"
+WIRELESS_PERSISTENT_DIR="$LSA_START_BASE/state/wireless"
+WIRELESS_QUALIFICATION_RECORD="$WIRELESS_PERSISTENT_DIR/qualification.json"
+WIRELESS_QUALIFICATION_POLICY="$WIRELESS_PERSISTENT_DIR/qualification.conf"
+WIRELESS_QUALIFICATION_EVIDENCE="$WIRELESS_PERSISTENT_DIR/evidence"
+# Probe callbacks run in command-substitution subshells, so a shell variable
+# cannot carry cache state across dependency-resolution passes.  This secure
+# runtime marker identifies the originating lsectl process by PID plus its
+# kernel start tick; a new report always has a distinct identity even after a
+# PID is recycled.
+WIRELESS_INVENTORY_MARKER="$LSA_RUNTIME_DIR/wireless.refresh.marker"
+WIRELESS_INVENTORY_START_TICK="$(awk '{print $22}' "/proc/$$/stat" 2>/dev/null || printf unknown)"
+WIRELESS_INVENTORY_INVOCATION="$$:$WIRELESS_INVENTORY_START_TICK"
+
+wireless_prepare_persistent_state() {
+    mkdir -p "$WIRELESS_PERSISTENT_DIR" "$WIRELESS_QUALIFICATION_EVIDENCE" || return 1
+    chmod 700 "$WIRELESS_PERSISTENT_DIR" "$WIRELESS_QUALIFICATION_EVIDENCE" 2>/dev/null || return 1
+}
+
+wireless_qualification_enabled() {
+    [ -r "$WIRELESS_QUALIFICATION_POLICY" ] || return 0
+    [ "$(awk -F= '$1 == "aggressive_first_run" { print $2; exit }' "$WIRELESS_QUALIFICATION_POLICY" 2>/dev/null || true)" != 0 ]
+}
+
+wireless_set_qualification_enabled() {
+    local enabled="$1"
+    wireless_prepare_persistent_state || return 1
+    case "$enabled" in
+        0|1) ;;
+        *) printf 'invalid wireless qualification policy\n' >&2; return 2 ;;
+    esac
+    ( umask 077; printf 'aggressive_first_run=%s\n' "$enabled" > "$WIRELESS_QUALIFICATION_POLICY" ) || return 1
+    chmod 600 "$WIRELESS_QUALIFICATION_POLICY" 2>/dev/null || return 1
+}
+
+wireless_root_iw_available() {
+    [ -x "$WIRELESS_IW" ] && [ -r "$WIRELESS_IW_LIB/libnl-3.so" ] && [ -r "$WIRELESS_IW_LIB/libnl-genl-3.so" ]
+}
+
+wireless_qualification_current() {
+    wireless_root_iw_available || return 1
+    [ -x "$LSA_TERMUX_PREFIX/bin/python" ] || return 1
+    LSA_WIRELESS_IW_LIB="$WIRELESS_IW_LIB" LSA_WIRELESS_NL80211="$WIRELESS_NL80211" "$LSA_TERMUX_PREFIX/bin/python" "$WIRELESS_QUALIFICATION" \
+        --iw "$WIRELESS_IW" --record "$WIRELESS_QUALIFICATION_RECORD" \
+        --evidence-dir "$WIRELESS_QUALIFICATION_EVIDENCE" --check >/dev/null 2>&1
+}
+
+wireless_qualify() {
+    local mode="${1:-aggressive}"
+    case "$mode" in safe|aggressive) ;; *) printf 'invalid wireless qualification mode\n' >&2; return 2 ;; esac
+    wireless_prepare_persistent_state || { printf 'cannot prepare protected wireless qualification state\n' >&2; return 1; }
+    wireless_root_iw_available || { printf 'root-owned standard iw is unavailable; deploy/bootstrap iw first\n' >&2; return 3; }
+    [ -x "$LSA_TERMUX_PREFIX/bin/python" ] || { printf 'Termux Python is unavailable for wireless qualification\n' >&2; return 3; }
+    LSA_WIRELESS_IW_LIB="$WIRELESS_IW_LIB" LSA_WIRELESS_NL80211="$WIRELESS_NL80211" "$LSA_TERMUX_PREFIX/bin/python" "$WIRELESS_QUALIFICATION" \
+        --iw "$WIRELESS_IW" --record "$WIRELESS_QUALIFICATION_RECORD" \
+        --evidence-dir "$WIRELESS_QUALIFICATION_EVIDENCE" --mode "$mode" || return $?
+    rm -f "$WIRELESS_INVENTORY_MARKER"
+}
+
+wireless_maybe_qualify() {
+    wireless_qualification_current && return 0
+    if wireless_qualification_enabled; then
+        wireless_qualify aggressive
+    else
+        wireless_qualify safe
+    fi
+}
+
+wireless_state_match() {
+    local category="$1" key="$2" support="${3:-}"
+    [ -r "$WIRELESS_STATE" ] || return 1
+    awk -F '\t' -v category="$category" -v key="$key" -v support="$support" '
+        NR > 1 && $1 == category && $2 == key && (support == "" || $3 == support) { found = 1 }
+        END { exit found ? 0 : 1 }
+    ' "$WIRELESS_STATE"
+}
+
+wireless_refresh_inventory() {
+    if [ -s "$WIRELESS_STATE" ] && [ -r "$WIRELESS_INVENTORY_MARKER" ] && [ "$(cat "$WIRELESS_INVENTORY_MARKER" 2>/dev/null || true)" = "$WIRELESS_INVENTORY_INVOCATION" ]; then
+        return 0
+    fi
+    [ -x "$LSA_TERMUX_PREFIX/bin/python" ] || { printf 'Termux Python is unavailable for wireless inventory'; return 3; }
+    # First-run active qualification is default policy.  Its failure must not
+    # suppress ordinary host-interface discovery; the resulting inventory and
+    # platform report remain the diagnostic path for the missing prerequisite.
+    wireless_maybe_qualify >/dev/null 2>&1 || true
+    LSA_ROOTSTART_DIR="$WIRELESS_ROOTSTART_DIR" \
+    LSA_WIRELESS_IW="$WIRELESS_IW" \
+    LSA_WIRELESS_IW_LIB="$WIRELESS_IW_LIB" \
+    "$LSA_TERMUX_PREFIX/bin/python" "$WIRELESS_INVENTORY" --state "$WIRELESS_STATE" \
+        --qualification-record "$WIRELESS_QUALIFICATION_RECORD" || {
+        printf 'read-only wireless inventory failed'
+        return 1
+    }
+    ( umask 077; printf '%s\n' "$WIRELESS_INVENTORY_INVOCATION" > "$WIRELESS_INVENTORY_MARKER" ) || {
+        printf 'cannot write wireless inventory refresh marker'
+        return 1
+    }
+}
+
+provider_android_wireless_host_probe() {
+    wireless_refresh_inventory || return $?
+    wireless_state_match interface host.primary AVAILABLE || {
+        printf 'no host wireless interface is safely visible'
+        return 3
+    }
+    printf 'read-only Android wireless host-interface inventory is available'
+}
+
+provider_android_wireless_p2p_probe() {
+    wireless_refresh_inventory || return $?
+    wireless_state_match p2p framework AVAILABLE || {
+        printf 'Android P2P is not advertised by the current safe inventory'
+        return 3
+    }
+    printf 'Android P2P is advertised; no group operation has been attempted'
+}
+
+provider_android_wireless_raw_probe() {
+    wireless_refresh_inventory || return $?
+    # Raw operations intentionally require an operationally verified result,
+    # not merely an iw binary or a driver advertising an interface mode.
+    wireless_state_match raw remain_on_channel AVAILABLE || {
+        printf 'no operationally verified raw remain-on-channel primitive'
+        return 3
+    }
+    printf 'operationally verified raw peer primitives are available'
+}
+
+provider_android_wireless_status() {
+    [ -r "$WIRELESS_STATE" ] && printf RUNNING || printf STOPPED
+}
+
+wireless_report_row() {
+    local category="$1" label="$2"
+    [ -r "$WIRELESS_STATE" ] || return 0
+    awk -F '\t' -v category="$category" -v label="$label" '
+        NR > 1 && $1 == category {
+            printf "  %-26s %s / %s", $2, $3, $4
+            if ($5 != "-") printf "  %s", $5
+            if ($6 != "-") printf "  (%s)", $6
+            printf "\n"
+        }
+    ' "$WIRELESS_STATE"
+}
+
+wireless_platform_report() {
+    printf 'Wireless Capability Report\n'
+    if [ ! -r "$WIRELESS_STATE" ]; then
+        printf '  inventory                  ERROR / UNVERIFIED  state missing\n'
+        return 0
+    fi
+    printf 'PHY:\n'
+    wireless_report_row phy PHY
+    printf 'Interfaces:\n'
+    wireless_report_row interface Interface
+    wireless_report_row mode Interface
+    printf '802.11s:\n'
+    wireless_report_row mesh Mesh
+    printf 'IBSS:\n'
+    wireless_report_row ibss IBSS
+    printf 'NAN / Wi-Fi Aware:\n'
+    wireless_report_row nan NAN
+    printf 'P2P:\n'
+    wireless_report_row p2p P2P
+    printf 'Raw peer primitives:\n'
+    wireless_report_row raw Raw
+    printf 'Concurrency:\n'
+    wireless_report_row concurrency Concurrency
+    printf 'Metrics:\n'
+    wireless_report_row metrics Metrics
+    printf 'Qualification:\n'
+    wireless_report_row qualification Qualification
+}
+
+lsa_provider_register android.wireless-host ANDROID_GENERIC 87000 'capability.android.properties' 'capability.wireless.inventory;capability.wireless.host-interface;capability.wireless.metrics' provider_android_wireless_host_probe provider_android_wireless_status
+lsa_provider_register android.wireless-p2p ANDROID_GENERIC 86500 'capability.wireless.inventory' 'capability.wireless.p2p.advertised' provider_android_wireless_p2p_probe provider_android_wireless_status
+lsa_provider_register android.wireless-raw ANDROID_GENERIC 86000 'capability.wireless.inventory' 'capability.wireless.raw.operational' provider_android_wireless_raw_probe provider_android_wireless_status
+lsa_report_register wireless.platform wireless_platform_report

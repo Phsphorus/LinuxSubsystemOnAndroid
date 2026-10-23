@@ -1,0 +1,27 @@
+#!/data/data/com.termux/files/usr/bin/bash
+
+LSA_ANDROID_CAPTURE_CONTROL="${LSA_ANDROID_CAPTURE_CONTROL:-$LSA_NONROOT_BASE/Providers/Android/Capture/control.py}"
+
+backend_camera_android_mjpeg_probe() {
+    [ -f "$LSA_ANDROID_CAPTURE_CONTROL" ] || { printf 'Termux Android capture provider control client is missing'; return 3; }
+    printf 'Android Camera API is exposed to Linux through loopback MJPEG'
+}
+
+backend_camera_android_mjpeg_start() {
+    "$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" camera start
+}
+
+backend_camera_android_mjpeg_stop() {
+    "$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" camera stop
+}
+
+backend_camera_android_mjpeg_status() {
+    local response
+    response="$("$LSA_TERMUX_PREFIX/bin/python" "$LSA_ANDROID_CAPTURE_CONTROL" camera status 2>/dev/null)" || { printf STOPPED; return 0; }
+    case "$response" in
+        *'"camera_active":true'*) printf RUNNING ;;
+        *) printf STOPPED ;;
+    esac
+}
+
+lsa_backend_register camera.android-mjpeg Camera C 90000 'capability.linux.chroot;capability.camera.android-api;capability.camera.http-mjpeg' 'capability.camera.linux;capability.camera.mjpeg;capability.camera.snapshot' backend_camera_android_mjpeg_probe backend_camera_android_mjpeg_start backend_camera_android_mjpeg_stop backend_camera_android_mjpeg_status ANDROID_GENERIC NO
